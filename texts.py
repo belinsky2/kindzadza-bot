@@ -10,15 +10,18 @@ import config
 def greeting_announce() -> str:
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Как добраться</a>" if config.EVENT_MAP_URL else ""
     return (
-        "🎤 <b>Стендап-концерт «Киндзадза»</b> в Нячанге!\n\n"
-        "Вечер живого юмора от наших комиков. Будет смешно, тепло и по-своему.\n\n"
-        f"📅 <b>Когда:</b> {config.EVENT_DATE}, начало в {config.EVENT_TIME} "
+        "Привет! 👋\n\n"
+        "Это бот регистрации на <b>стендап-концерт «Киндзадза»</b> в Нячанге — "
+        "вечер живого юмора на русском языке.\n\n"
+        f"📅 <b>{config.EVENT_DATE}</b>, начало в {config.EVENT_TIME} "
         f"(двери с {config.DOORS_TIME})\n"
-        f"📍 <b>Где:</b> {config.EVENT_LOCATION}{map_line}\n\n"
-        "📸 На мероприятии будет работать фотограф — кадры с вечера будут шикарными.\n"
-        "🎂 При оплате <b>онлайн</b> вы участвуете в <b>розыгрыше десертов</b> "
-        "и <b>гарантируете себе место</b>.\n\n"
-        "Жми «Зарегистрироваться» 👇"
+        f"📍 {config.EVENT_LOCATION}{map_line}\n\n"
+        f"💰 Билет: 🇻🇳 {config.format_amount('vnd')} · "
+        f"🇷🇺 {config.format_amount('rub')} · "
+        f"🪙 {config.format_amount('usdt')}\n\n"
+        "📸 На мероприятии будет фотограф.\n"
+        "🎂 Оплати <b>онлайн</b> — гарантируешь место и участвуешь в розыгрыше десертов.\n\n"
+        "👇 Регистрируйся — мест немного!"
     )
 
 
@@ -40,9 +43,18 @@ QTY_BAD = "Нужно число от 1 до {max}. Попробуй ещё ра
 
 
 def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
+    if not sold_out:
+        price_line = (
+            f"💰 Итого: 🇻🇳 {config.format_amount('vnd', qty)} · "
+            f"🇷🇺 {config.format_amount('rub', qty)} · "
+            f"🪙 {config.format_amount('usdt', qty)}\n\n"
+        )
+    else:
+        price_line = ""
     head = (
-        f"🎟 Билетов: <b>{qty}</b>\n\n"
-        "💳 Оплати <b>онлайн</b> — гарантируешь себе место и участвуешь в "
+        f"🎟 Билетов: <b>{qty}</b>\n"
+        f"{price_line}"
+        "💳 Оплати <b>онлайн</b> — гарантируешь место и участвуешь в "
         "розыгрыше десертов 🎂.\n"
         "📍 При оплате на месте место <b>не гарантировано</b>.\n"
     )
@@ -73,10 +85,10 @@ def requisites(method: str, qty: int) -> str:
 
 def screenshot_received() -> str:
     return (
-        "Скрин получен ✅\n"
-        "Место за тобой <b>закреплено</b>. Обычно подтверждаем в течение "
-        f"{config.CONFIRM_SLA}. Как подтвердим — пришлём номера розыгрыша и все детали.\n"
-        "Если что — кнопка ниже."
+        "Скрин получен, место за тобой <b>закреплено</b> ✅\n\n"
+        f"Проверим оплату в течение {config.CONFIRM_SLA} — после этого пришлём "
+        "номера розыгрыша и QR-билет.\n\n"
+        "Есть вопросы? Напиши организатору — кнопка ниже."
     )
 
 
@@ -110,14 +122,15 @@ def confirmed(reg: dict) -> str:
         links.append(f"<a href=\"{config.INSTA_LINK}\">Инста Киндзадза</a>")
     links_line = (" · ".join(links) + "\n") if links else ""
     return (
-        "Вы зарегистрированы! 🎉\n\n"
+        "🎉 Ты зарегистрирован!\n\n"
         f"📅 {config.EVENT_DATE}, начало {config.EVENT_TIME} (двери {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}{map_line}\n"
         f"🎟 Билетов: <b>{reg.get('qty', 1)}</b>\n"
         f"{nums_line}"
-        "📸 На мероприятии будет фотограф.\n"
+        "📸 На вечере будет фотограф.\n"
         f"{links_line}"
-        "\nДо встречи! 🎤"
+        "\nQR-билет — следующим сообщением. Сохрани его!\n"
+        "До встречи 🎤"
     )
 
 
@@ -151,8 +164,8 @@ def status_view(reg: dict | None) -> str:
         )
     if status == "awaiting_payment":
         return (
-            f"💳 Ты выбрал онлайн-оплату ({qty} билет(ов)), но скрин ещё не прислал.\n"
-            "Пришли скрин — закрепим место. Или начни заново: /start"
+            f"💳 Онлайн-оплата выбрана, {qty} билет(ов). Осталось прислать скрин.\n"
+            "Пришли сюда фото чека — закрепим место. Или начни заново: /start"
         )
     if status == "door":
         return (
@@ -268,9 +281,9 @@ def reminder_door(when: str) -> str:
 
 def reminder_not_paid(when: str) -> str:
     return (
-        f"🎤 {when} — стендап «Киндзадза», а ты так и не оплатил 😢\n"
-        "Места заканчиваются. Успей оплатить онлайн, гарантируй место и участвуй "
-        "в розыгрыше десертов 🎂 👉 /start"
+        f"🎤 {when} — стендап «Киндзадза»!\n"
+        "Места ещё есть, но заканчиваются. Оплати онлайн — "
+        "гарантируй место и участвуй в розыгрыше десертов 🎂 👉 /start"
     )
 
 
