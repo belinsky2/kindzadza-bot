@@ -15,11 +15,6 @@ def greeting_announce() -> str:
         f"📅 <b>Когда:</b> {config.EVENT_DATE}, начало в {config.EVENT_TIME} "
         f"(двери с {config.DOORS_TIME})\n"
         f"📍 <b>Где:</b> {config.EVENT_LOCATION}{map_line}\n\n"
-        "<b>Цены за билет:</b>\n"
-        f"• 🇻🇳 {config.format_amount('vnd')}\n"
-        f"• 🇷🇺 {config.format_amount('rub')}\n"
-        f"• 🪙 {config.format_amount('usdt')} ({config.USDT_NETWORK})\n"
-        f"• 📍 Оплата на месте — {config.format_amount('door')}\n\n"
         "📸 На мероприятии будет работать фотограф — кадры с вечера будут шикарными.\n"
         "🎂 При оплате <b>онлайн</b> вы участвуете в <b>розыгрыше десертов</b> "
         "и <b>гарантируете себе место</b>.\n\n"
@@ -48,8 +43,8 @@ def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
     head = (
         f"🎟 Билетов: <b>{qty}</b>\n\n"
         "💳 Оплати <b>онлайн</b> — гарантируешь себе место и участвуешь в "
-        "розыгрыше десертов 🎂 (номер за каждый билет).\n"
-        "📍 Оплата на месте место <b>не гарантирует</b>.\n"
+        "розыгрыше десертов 🎂.\n"
+        "📍 При оплате на месте место <b>не гарантировано</b>.\n"
     )
     if scarcity:
         head += f"\n{scarcity}\n"
@@ -64,10 +59,12 @@ def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
 
 def requisites(method: str, qty: int) -> str:
     amount = config.format_amount(method, qty)
+    unit = config.format_amount(method, 1)
+    per_ticket = f" ({qty} × {unit})" if qty > 1 else ""
     req = config.REQUISITES[method]
     net = f"\nСеть: <b>{config.USDT_NETWORK}</b>" if method == "usdt" else ""
     return (
-        f"К оплате: <b>{amount}</b> (за {qty} билет(ов))\n\n"
+        f"К оплате: <b>{amount}</b>{per_ticket}\n\n"
         f"Реквизиты:\n<code>{req}</code>{net}\n\n"
         "🎂 Оплата онлайн = гарантия места + участие в розыгрыше десертов.\n\n"
         "После оплаты пришли сюда <b>скрин</b> — место сразу закрепим за тобой."
@@ -89,11 +86,13 @@ def ask_screenshot_again() -> str:
 
 def door_registered(qty: int) -> str:
     amount = config.format_amount("door", qty)
+    unit = config.format_amount("door", 1)
+    per_ticket = f" ({qty} × {unit})" if qty > 1 else ""
     return (
-        f"Записал тебя на оплату на месте: <b>{qty}</b> билет(ов), {amount}.\n\n"
-        "⚠️ Важно: оплата на месте <b>не гарантирует место</b> — если будет аншлаг, "
-        "онлайн-гости проходят в приоритете, и ты не участвуешь в розыгрыше десертов.\n\n"
-        "Хочешь — переключись на онлайн и гарантируй место 👇"
+        f"📍 Записал на оплату на месте: {qty} билет(ов), <b>{amount}</b>{per_ticket}.\n\n"
+        "Место не гарантировано — при аншлаге онлайн-гости заходят первыми "
+        "и участвуют в розыгрыше десертов.\n\n"
+        "💳 Гарантируй место — оплати онлайн 👇"
     )
 
 
