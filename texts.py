@@ -1,36 +1,32 @@
-"""Все тексты сообщений (RU). Правь здесь — логика не зависит от формулировок."""
+"""Все тексты сообщений (RU). Правь здесь – логика не зависит от формулировок."""
 from __future__ import annotations
 
 import config
 
 # ===================== АНОНС / ПРИВЕТСТВИЕ =====================
-# Чек-лист полей: что / когда / двери / где+карта / лайн-ап / язык / длительность /
-# возраст (18+?) / цены / фотограф / что взять. Заполни под своё мероприятие.
 
 def greeting_announce() -> str:
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Как добраться</a>" if config.EVENT_MAP_URL else ""
     return (
         "Привет! 👋\n\n"
-        "Это бот регистрации на <b>стендап-концерт «Киндзадза»</b> в Нячанге — "
-        "вечер живого юмора на русском языке.\n\n"
+        "Это бот регистрации на <b>стендап-концерт «Киндзадза»</b> –\n"
+        "вечер живого юмора в грузинском ресторане в Нячанге.\n\n"
         f"📅 <b>{config.EVENT_DATE}</b>, начало в {config.EVENT_TIME} "
         f"(двери с {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}{map_line}\n\n"
-        f"💰 Билет: 🇻🇳 {config.format_amount('vnd')} · "
-        f"🇷🇺 {config.format_amount('rub')} · "
-        f"🪙 {config.format_amount('usdt')}\n\n"
-        "📸 На мероприятии будет фотограф.\n"
-        "🎂 Оплати <b>онлайн</b> — гарантируешь место и участвуешь в розыгрыше десертов.\n\n"
-        "👇 Регистрируйся — мест немного!"
+        "📸 На вечере работает профессиональный фотограф –\n"
+        "унесёшь домой красивые снимки с тёплого вечера в подарок себе.\n"
+        "🎂 Оплати <b>онлайн</b> – гарантируешь место и участвуешь в розыгрыше десертов.\n\n"
+        "👇 Регистрируйся – мест немного!"
     )
 
 
 # ===================== РЕГИСТРАЦИЯ =====================
 
-ASK_NAME = "Как тебя зовут? Напиши имя — оно будет в списке гостей."
+ASK_NAME = "Как тебя зовут? Напиши имя – оно будет в списке гостей."
 
 NO_USERNAME = (
-    "У тебя не задан @username в Telegram — он нужен, чтобы найти тебя в списке.\n"
+    "У тебя не задан @username в Telegram – он нужен, чтобы найти тебя в списке.\n"
     "Зайди в настройки Telegram → Имя пользователя, задай ник и нажми /start заново.\n"
     "Или свяжись с организатором, если не получается."
 )
@@ -54,7 +50,7 @@ def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
     head = (
         f"🎟 Билетов: <b>{qty}</b>\n"
         f"{price_line}"
-        "💳 Оплати <b>онлайн</b> — гарантируешь место и участвуешь в "
+        "💳 Оплати <b>онлайн</b> – гарантируешь место и участвуешь в "
         "розыгрыше десертов 🎂.\n"
         "📍 При оплате на месте место <b>не гарантировано</b>.\n"
     )
@@ -62,7 +58,7 @@ def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
         head += f"\n{scarcity}\n"
     if sold_out:
         head += (
-            "\n⚠️ Онлайн-места закончились (аншлаг). Осталась только оплата на месте — "
+            "\n⚠️ Онлайн-места закончились (аншлаг). Осталась только оплата на месте –\n"
             "без гарантии места."
         )
     head += "\nВыбери способ оплаты:"
@@ -79,16 +75,16 @@ def requisites(method: str, qty: int) -> str:
         f"К оплате: <b>{amount}</b>{per_ticket}\n\n"
         f"Реквизиты:\n<code>{req}</code>{net}\n\n"
         "🎂 Оплата онлайн = гарантия места + участие в розыгрыше десертов.\n\n"
-        "После оплаты пришли сюда <b>скрин</b> — место сразу закрепим за тобой."
+        "После оплаты пришли сюда <b>скрин</b> – место сразу закрепим за тобой."
     )
 
 
 def screenshot_received() -> str:
     return (
-        "Скрин получен, место за тобой <b>закреплено</b> ✅\n\n"
-        f"Проверим оплату в течение {config.CONFIRM_SLA} — после этого пришлём "
-        "номера розыгрыша и QR-билет.\n\n"
-        "Есть вопросы? Напиши организатору — кнопка ниже."
+        "Спасибо! Место за тобой <b>закреплено</b> ✅\n\n"
+        f"Проверим оплату в течение {config.CONFIRM_SLA} – "
+        "после этого пришлём номера розыгрыша и QR-билет.\n\n"
+        "Есть вопросы? Напиши организатору – кнопка ниже."
     )
 
 
@@ -101,10 +97,10 @@ def door_registered(qty: int) -> str:
     unit = config.format_amount("door", 1)
     per_ticket = f" ({qty} × {unit})" if qty > 1 else ""
     return (
-        f"📍 Записал на оплату на месте: {qty} билет(ов), <b>{amount}</b>{per_ticket}.\n\n"
-        "Место не гарантировано — при аншлаге онлайн-гости заходят первыми "
+        f"📍 Записал! Оплата на месте: {qty} билет(ов), <b>{amount}</b>{per_ticket}.\n\n"
+        "Место не гарантировано – при аншлаге онлайн-гости заходят первыми\n"
         "и участвуют в розыгрыше десертов.\n\n"
-        "💳 Гарантируй место — оплати онлайн 👇"
+        "💳 Гарантируй место – оплати онлайн 👇"
     )
 
 
@@ -114,7 +110,7 @@ def confirmed(reg: dict) -> str:
     if nums:
         pretty = ", ".join(f"№{n}" for n in nums.split(","))
         nums_line = f"🎂 Номера розыгрыша десертов: <b>{pretty}</b>\n"
-    map_line = f" — <a href=\"{config.EVENT_MAP_URL}\">карта</a>" if config.EVENT_MAP_URL else ""
+    map_line = f" – <a href=\"{config.EVENT_MAP_URL}\">карта</a>" if config.EVENT_MAP_URL else ""
     links = []
     if config.TG_LINK:
         links.append(f"<a href=\"{config.TG_LINK}\">TG Киндзадза</a>")
@@ -122,23 +118,23 @@ def confirmed(reg: dict) -> str:
         links.append(f"<a href=\"{config.INSTA_LINK}\">Инста Киндзадза</a>")
     links_line = (" · ".join(links) + "\n") if links else ""
     return (
-        "🎉 Ты зарегистрирован!\n\n"
+        "🎉 Ты с нами! Место забронировано.\n\n"
         f"📅 {config.EVENT_DATE}, начало {config.EVENT_TIME} (двери {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}{map_line}\n"
         f"🎟 Билетов: <b>{reg.get('qty', 1)}</b>\n"
         f"{nums_line}"
-        "📸 На вечере будет фотограф.\n"
+        "📸 На вечере работает профессиональный фотограф.\n"
         f"{links_line}"
-        "\nQR-билет — следующим сообщением. Сохрани его!\n"
-        "До встречи 🎤"
+        "\nQR-билет – следующим сообщением. Сохрани его!\n"
+        "Ждём тебя – будет тепло и весело 🥂"
     )
 
 
 def rejected() -> str:
     return (
         "Оплату подтвердить не удалось 😕\n"
-        "Возможно, скрин нечитаемый или сумма не сошлась. Пришли скрин заново "
-        "или свяжись с организатором — поможем."
+        "Возможно, скрин нечитаемый или сумма не сошлась.\n"
+        "Пришли скрин заново или свяжись с организатором – поможем разобраться."
     )
 
 
@@ -151,11 +147,11 @@ def status_view(reg: dict | None) -> str:
     qty = reg.get("qty", 1)
     if status == "confirmed_online":
         nums = reg.get("raffle_numbers") or ""
-        pretty = ", ".join(f"№{n}" for n in nums.split(",")) if nums else "—"
+        pretty = ", ".join(f"№{n}" for n in nums.split(",")) if nums else "–"
         return (
             f"✅ Оплата подтверждена. Билетов: <b>{qty}</b>.\n"
             f"🎂 Номера розыгрыша: <b>{pretty}</b>.\n"
-            "Ждём тебя! 🎤"
+            "Ждём тебя 🥂"
         )
     if status == "awaiting_confirmation":
         return (
@@ -165,11 +161,11 @@ def status_view(reg: dict | None) -> str:
     if status == "awaiting_payment":
         return (
             f"💳 Онлайн-оплата выбрана, {qty} билет(ов). Осталось прислать скрин.\n"
-            "Пришли сюда фото чека — закрепим место. Или начни заново: /start"
+            "Пришли сюда фото чека – закрепим место. Или начни заново: /start"
         )
     if status == "door":
         return (
-            f"📍 Ты записан на оплату на месте ({qty} билет(ов)) — место не гарантировано.\n"
+            f"📍 Ты записан на оплату на месте ({qty} билет(ов)) – место не гарантировано.\n"
             "Хочешь гарантировать? Оплати онлайн: /start"
         )
     if status == "rejected":
@@ -184,10 +180,10 @@ def admin_card(reg: dict) -> str:
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
     return (
         "🧾 <b>Новая оплата на подтверждение</b>\n\n"
-        f"👤 {reg.get('name', '—')} ({uname})\n"
+        f"👤 {reg.get('name', '–')} ({uname})\n"
         f"💳 Способ: {m.get('label', reg['payment_method'])}\n"
         f"🎟 Билетов: {reg.get('qty', 1)}\n"
-        f"💰 Сумма: <b>{reg.get('amount', '—')}</b>\n"
+        f"💰 Сумма: <b>{reg.get('amount', '–')}</b>\n"
         f"🆔 <code>{reg['user_id']}</code>"
     )
 
@@ -199,9 +195,9 @@ def ticket_caption(reg: dict) -> str:
     return (
         "🎟 <b>Твой билет</b>\n"
         f"Гостей: <b>{reg.get('qty', 1)}</b>\n\n"
-        "Покажи этот QR на входе — организатор отсканирует его.\n"
+        "Покажи этот QR на входе – организатор отсканирует его.\n"
         f"Код билета: <code>{code}</code>\n\n"
-        "⚠️ QR одноразовый: после отметки на входе повторно не сработает. "
+        "⚠️ QR одноразовый: после отметки на входе повторно не сработает.\n"
         "Не пересылай его посторонним."
     )
 
@@ -226,7 +222,7 @@ def checkin_card(reg: dict) -> str:
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
     return (
         "🎫 <b>Билет</b>\n"
-        f"👤 {reg.get('name', '—')} ({uname})\n"
+        f"👤 {reg.get('name', '–')} ({uname})\n"
         f"🎟 Оплачено мест: <b>{reg.get('qty', 1)}</b>\n\n"
         "Сколько человек пришло? Отметь 👇"
     )
@@ -237,23 +233,23 @@ def checkin_already(reg: dict) -> str:
     ts = reg.get("checked_in_at")
     when = (
         datetime.datetime.fromtimestamp(ts, config.TZ).strftime("%H:%M")
-        if ts else "—"
+        if ts else "–"
     )
     return (
         "⚠️ <b>Билет уже отмечен!</b>\n"
-        f"👤 {reg.get('name', '—')}\n"
+        f"👤 {reg.get('name', '–')}\n"
         f"Отмечен в {when}, прошло гостей: <b>{reg.get('arrived_count', '?')}</b> "
         f"из {reg.get('qty', 1)}.\n\n"
-        "Повторный вход по этому QR — не пропускать."
+        "Повторный вход по этому QR – не пропускать."
     )
 
 
 def checkin_done(reg: dict, arrived: int) -> str:
     return (
         "✅ <b>Отмечено!</b>\n"
-        f"👤 {reg.get('name', '—')}\n"
+        f"👤 {reg.get('name', '–')}\n"
         f"Прошло гостей: <b>{arrived}</b> из {reg.get('qty', 1)}.\n"
-        "Приятного вечера 🎤"
+        "Добро пожаловать! 🥂"
     )
 
 
@@ -262,27 +258,27 @@ def checkin_done(reg: dict, arrived: int) -> str:
 def reminder_paid(when: str) -> str:
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Карта</a>" if config.EVENT_MAP_URL else ""
     return (
-        f"🎤 Напоминаем: {when} ждём тебя на стендапе «Киндзадза»!\n\n"
+        f"🎤 Привет! {when} ждём тебя на стендапе «Киндзадза».\n\n"
         f"📅 {config.EVENT_DATE}, начало {config.EVENT_TIME} (двери {config.DOORS_TIME})\n"
-        f"📍 {config.EVENT_LOCATION}{map_line}\n"
-        "📸 Будет фотограф. До встречи!"
+        f"📍 {config.EVENT_LOCATION}{map_line}\n\n"
+        "Будет тепло, весело и вкусно. До встречи 🥂"
     )
 
 
 def reminder_door(when: str) -> str:
     return (
-        f"🎤 {when} — стендап «Киндзадза»! Ты записан на оплату на месте.\n\n"
+        f"🎤 {when} – стендап «Киндзадза»! Ты записан на оплату на месте.\n\n"
         f"📅 {config.EVENT_DATE}, начало {config.EVENT_TIME} (двери {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}\n\n"
-        "⚠️ Место не гарантировано. Можешь ещё успеть оплатить онлайн и гарантировать "
-        "место + участие в розыгрыше десертов 👉 /start"
+        "⚠️ Место не гарантировано. Можешь ещё успеть оплатить онлайн –\n"
+        "гарантируй место и участвуй в розыгрыше десертов 👉 /start"
     )
 
 
 def reminder_not_paid(when: str) -> str:
     return (
-        f"🎤 {when} — стендап «Киндзадза»!\n"
-        "Места ещё есть, но заканчиваются. Оплати онлайн — "
+        f"🎤 {when} – стендап «Киндзадза»!\n"
+        "Места ещё есть, но заканчиваются. Оплати онлайн –\n"
         "гарантируй место и участвуй в розыгрыше десертов 🎂 👉 /start"
     )
 
@@ -292,14 +288,14 @@ def reminder_not_paid(when: str) -> str:
 def post_cta(segment: str | None, scarcity: str | None) -> str:
     sc = f"\n{scarcity}" if scarcity else ""
     if segment == "C":  # оплатили онлайн
-        return "\n\n———\n🎤 Скоро увидимся! Если захочешь взять ещё билеты — /start"
+        return "\n\n–––\n🎤 Скоро увидимся! Если захочешь взять ещё билеты – /start"
     if segment == "B":  # оплата на месте
         return (
-            "\n\n———\n📍 Ты пока на оплате на месте. Гарантируй место онлайн и участвуй "
+            "\n\n–––\n📍 Ты пока на оплате на месте. Гарантируй место онлайн и участвуй "
             f"в розыгрыше десертов 🎂 👉 /start{sc}"
         )
     # сегмент A и все остальные (новые/не оплатившие)
     return (
-        "\n\n———\n👉 Успей зарегистрироваться и оплатить онлайн: гарантируешь место "
+        "\n\n–––\n👉 Успей зарегистрироваться и оплатить онлайн: гарантируешь место "
         f"и участвуешь в розыгрыше десертов 🎂 /start{sc}"
     )
