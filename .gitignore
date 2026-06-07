@@ -1,0 +1,13 @@
+.env
+*.db
+*.log
+credentials.json
+.gh_token
+gh_pat.txt
+__pycache__/
+*.pyc
+.venv/
+venv/
+content/announce.jpg
+content/posts/*
+!content/posts/.gitkeep

@@ -1,0 +1,126 @@
+"""Inline-клавиатуры."""
+from __future__ import annotations
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+import config
+import db
+
+
+def _contact_button() -> InlineKeyboardButton | None:
+    if not config.ORGANIZER_USERNAME:
+        return None
+    return InlineKeyboardButton(
+        text="💬 Связаться с организатором",
+        url=f"https://t.me/{config.ORGANIZER_USERNAME}",
+    )
+
+
+def register_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✍️ Зарегистрироваться", callback_data="register")
+    contact = _contact_button()
+    if contact:
+        kb.row(contact)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def returning_kb(status: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if status == db.STATUS_AWAITING_PAYMENT:
+        kb.button(text="💳 Завершить оплату", callback_data="register")
+    elif status == db.STATUS_REJECTED:
+        kb.button(text="📸 Прислать скрин заново", callback_data="register")
+    elif status == db.STATUS_DOOR:
+        kb.button(text="💳 Оплатить онлайн", callback_data="register")
+    else:
+        kb.button(text="🎟 Купить ещё билеты", callback_data="register")
+    contact = _contact_button()
+    if contact:
+        kb.row(contact)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def qty_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for n in (1, 2, 3, 4):
+        kb.button(text=str(n), callback_data=f"qty:{n}")
+    kb.button(text="5+", callback_data="qty:more")
+    kb.adjust(5)
+    return kb.as_markup()
+
+
+def payment_kb(sold_out: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if not sold_out:
+        for key in config.ONLINE_METHODS:
+            kb.button(text=config.PAYMENT_METHODS[key]["label"], callback_data=f"pay:{key}")
+    kb.button(text=config.PAYMENT_METHODS["door"]["label"], callback_data="pay:door")
+    contact = _contact_button()
+    if contact:
+        kb.row(contact)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def waiting_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    contact = _contact_button()
+    if contact:
+        kb.row(contact)
+    return kb.as_markup()
+
+
+def rejected_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📸 Прислать скрин заново", callback_data="resend")
+    contact = _contact_button()
+    if contact:
+        kb.row(contact)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def door_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💳 Оплатить онлайн и гарантировать место", callback_data="to_online")
+    contact = _contact_button()
+    if contact:
+        kb.row(contact)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def admin_confirm_kb(user_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Подтвердить", callback_data=f"adm:confirm:{user_id}")
+    kb.button(text="❌ Отклонить", callback_data=f"adm:reject:{user_id}")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+def checkin_arrived_kb(code: str, qty: int) -> InlineKeyboardMarkup:
+    """Кнопки 'сколько пришло': 1..qty (до 10)."""
+    kb = InlineKeyboardBuilder()
+    n = min(qty, 10)
+    if n == 1:
+        kb.button(text="✅ Пришёл (1)", callback_data=f"ci:{code}:1")
+    else:
+        for k in range(1, n + 1):
+            kb.button(text=str(k), callback_data=f"ci:{code}:{k}")
+    kb.adjust(5)
+    return kb.as_markup()
+
+
+def broadcast_segment_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="A · Не оплатили", callback_data="bc:A")
+    kb.button(text="B · На месте", callback_data="bc:B")
+    kb.button(text="C · Оплатили", callback_data="bc:C")
+    kb.button(text="Все", callback_data="bc:all")
+    kb.button(text="Отмена", callback_data="bc:cancel")
+    kb.adjust(2, 2, 1)
+    return kb.as_markup()

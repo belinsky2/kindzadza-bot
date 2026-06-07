@@ -1,0 +1,126 @@
+# Бот «Киндзадза» — регистрация и приём оплат на стендап
+
+Telegram-бот для регистрации зрителей, ручного подтверждения оплат, учёта мест,
+ежедневной рассылки постов с персональным CTA и напоминаний.
+
+## Что умеет
+
+- Воронка: приветствие/анонс → имя → количество билетов → способ оплаты → скрин → подтверждение.
+- Способы оплаты: донги / рубли / USDT / на месте. Сумма = цена × количество.
+- Онлайн-оплата **гарантирует место** (бронь с момента отправки скрина) и даёт **номер розыгрыша
+  за каждый билет**.
+- **QR-билет** после подтверждения: скан на входе с отметкой «пришёл» и защитой от повторного прохода.
+- Ручное подтверждение оргами в админ-группе (кнопки ✅/❌).
+- Учёт мест (лимит 60), показ «осталось N» при дефиците, закрытие онлайна при аншлаге.
+- Google Таблица — зеркало регистраций для оргов (опционально).
+- Ежедневный пост-DM всем, кто запускал бота, с CTA по сегменту (не оплатил / на месте / оплатил).
+- Напоминания накануне и в день мероприятия по сегментам.
+
+## Команды
+
+- Пользователь: `/start`, `/status`.
+- Админ-группа: `/stats`, `/post_now`, `/addpost`, `/broadcast`.
+
+## Установка (локально)
+
+```bash
+cd ~/kindzadza-bot
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# заполни .env (см. ниже), затем:
+python main.py
+```
+
+### Что положить в `.env`
+
+1. **BOT_TOKEN** — у [@BotFather](https://t.me/BotFather): `/newbot`.
+2. **BOT_USERNAME** — username бота без @ (для ссылок).
+3. **ADMIN_GROUP_ID** — id группы оргов:
+   - создай группу, добавь бота, дай ему права админа;
+   - временно добавь [@getmyid_bot](https://t.me/getmyid_bot) или перешли сообщение из группы
+     [@getidsbot](https://t.me/getidsbot) — получишь id (для супергрупп он отрицательный, вида `-100...`).
+4. **ORGANIZER_USERNAME** — твой @username (кнопка «Связаться с организатором»).
+5. **Детали мероприятия** — `EVENT_DATE`, `EVENT_TIME`, `DOORS_TIME`, `EVENT_LOCATION`, `EVENT_MAP_URL`.
+6. **Реквизиты** — `REQUISITES_VND`, `REQUISITES_RUB`, `REQUISITES_USDT`, `USDT_NETWORK`.
+7. **Ссылки** — `TG_LINK`, `INSTA_LINK`, `BOT_LINK`.
+8. **Напоминания** — `REMINDER_EVE`, `REMINDER_DAY` (формат `YYYY-MM-DD HH:MM`, по таймзоне Нячанга).
+
+### Google Таблица (опционально, но удобно)
+
+1. В [Google Cloud Console](https://console.cloud.google.com/) создай проект → включи **Google Sheets API**.
+2. Создай **Service Account**, скачай ключ JSON → положи в проект как `credentials.json`.
+3. Создай Google Таблицу, **расшарь** её на email сервис-аккаунта (из JSON, поле `client_email`)
+   с правами редактора.
+4. В `.env` укажи `SPREADSHEET_ID` (из URL таблицы) и `GOOGLE_CREDENTIALS_FILE=credentials.json`.
+
+Без этих настроек бот работает, просто не пишет в таблицу (всё хранится в `bot.db`).
+
+## QR-билеты и вход
+
+- При подтверждении онлайн-оплаты гость автоматически получает **QR-билет** (один на заказ,
+  с числом гостей). Для этого должен быть задан `BOT_USERNAME` в `.env`.
+- На входе организатор **сканирует QR телефоном** (любой камерой/QR-сканером) — открывается бот,
+  показывает карточку гостя и спрашивает «сколько пришло». Орг отмечает число → вход зафиксирован.
+- **Защита от безбилетников:** QR одноразовый. Повторное сканирование показывает
+  «⚠️ уже отмечен в HH:MM, прошло N» — по тому же QR второй раз не пройти. Орг сам указывает,
+  сколько человек из оплаченных реально пришло.
+- **Кто может отмечать вход:** участники админ-группы (`ADMIN_GROUP_ID`) определяются автоматически.
+  Можно дополнительно перечислить id в `ADMIN_IDS`. Сам гость, отсканировав свой QR, увидит только
+  свой билет — отметить вход не сможет.
+- Сводка по входу видна в `/stats` («На входе отмечено: N гостей»).
+
+> Важно: каждый орг, который будет сканировать на входе, должен заранее **нажать /start у бота**
+> (иначе бот не сможет открыть ему чат при сканировании).
+
+## Контент
+
+- Афиша: положи `content/announce.jpg` (показывается в анонсе на `/start`).
+- Посты: добавляй через `/addpost` в админ-группе (ответом на фото или текстом). Они уходят в очередь
+  и публикуются по одному в день в `DAILY_POST_TIME`. Проверить вручную — `/post_now`.
+
+## Деплой на VPS (Ubuntu, systemd)
+
+```bash
+# на сервере
+sudo apt update && sudo apt install -y python3-venv git
+git clone <repo> /opt/kindzadza-bot   # или scp файлов
+cd /opt/kindzadza-bot
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cp .env.example .env && nano .env       # заполнить
+# при необходимости положить credentials.json и content/announce.jpg
+```
+
+Создай сервис `/etc/systemd/system/kindzadza-bot.service`:
+
+```ini
+[Unit]
+Description=Kindzadza Telegram bot
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/kindzadza-bot
+ExecStart=/opt/kindzadza-bot/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now kindzadza-bot
+sudo systemctl status kindzadza-bot
+journalctl -u kindzadza-bot -f      # логи
+```
+
+## Заметки
+
+- Таймзона по умолчанию `Asia/Ho_Chi_Minh` (UTC+7).
+- `bot.db` (SQLite) — источник истины: регистрации, счётчик розыгрыша, очередь постов, флаги рассылок.
+  Бэкап = копия файла.
+- Напоминания не дублируются после перезапуска (флаги в БД).
