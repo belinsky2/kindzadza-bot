@@ -93,6 +93,7 @@ ONLINE_METHODS = [k for k, v in PAYMENT_METHODS.items() if v["online"]]
 DB_PATH: str = os.getenv("DB_PATH", "bot.db").strip()
 CONTENT_DIR: str = os.getenv("CONTENT_DIR", "content").strip()
 ANNOUNCE_IMAGE: str = os.path.join(CONTENT_DIR, "announce.jpg")
+MENU_IMAGE: str = os.path.join(CONTENT_DIR, "menu.jpg")
 POSTS_DIR: str = os.path.join(CONTENT_DIR, "posts")
 
 

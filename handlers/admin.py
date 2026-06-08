@@ -5,10 +5,11 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message
 
 import config
 import db
@@ -62,6 +63,12 @@ async def on_admin_decision(call: CallbackQuery, bot: Bot) -> None:
             if config.BOT_USERNAME and reg.get("ticket_code"):
                 qr = tickets.make_qr_png(tickets.ticket_link(reg["ticket_code"]))
                 await bot.send_photo(user_id, qr, caption=texts.ticket_caption(reg))
+            if os.path.exists(config.MENU_IMAGE):
+                await bot.send_photo(
+                    user_id,
+                    FSInputFile(config.MENU_IMAGE),
+                    caption=texts.menu_promo(),
+                )
         except Exception:
             log.exception("Не удалось уведомить пользователя %s о подтверждении", user_id)
         await _mark_card(call, f"✅ Подтвердил {actor} · номера: "
