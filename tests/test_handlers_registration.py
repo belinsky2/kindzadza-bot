@@ -9,6 +9,7 @@ import db
 from handlers.registration import (
     cmd_start,
     cmd_status,
+    cmd_reset,
     on_register,
     on_name,
     on_qty,
@@ -200,6 +201,43 @@ async def test_status_awaiting_confirmation(fresh_db):
 
     text = msg.answer.call_args[0][0]
     assert "Скрин получен" in text or "закреплено" in text
+
+
+# ==================== /reset ====================
+
+async def test_reset_clears_registration(fresh_db):
+    uid = 150
+    await db.ensure_user(uid, "resetme")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, username="resetme")
+    state = make_state()
+    await cmd_reset(msg, state)
+
+    state.clear.assert_awaited_once()
+    assert await db.get_registration(uid) is None
+    msg.answer.assert_awaited_once()
+
+
+async def test_reset_then_start_shows_greeting(fresh_db):
+    """После /reset пользователь снова видит приветствие, а не статус."""
+    uid = 151
+    await db.ensure_user(uid, "again")
+    await db.set_order(uid, 1, "door", "x", db.STATUS_DOOR)
+
+    # сброс
+    state = make_state()
+    await cmd_reset(make_message(user_id=uid, username="again"), state)
+
+    # /start заново
+    msg = make_message(user_id=uid, username="again")
+    cmd = make_command(args="")
+    bot = make_bot()
+    with patch("os.path.exists", return_value=False):
+        await cmd_start(msg, make_state(), cmd, bot)
+
+    text = msg.answer.call_args[0][0]
+    assert "Привет" in text  # приветствие, не статус
 
 
 # ==================== on_register ====================

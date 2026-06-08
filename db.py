@@ -114,6 +114,12 @@ async def get_registration(user_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
+async def delete_registration(user_id: int) -> None:
+    """Полностью удаляет запись пользователя — /start начнётся с приветствия."""
+    await _db.execute("DELETE FROM registrations WHERE user_id=?", (user_id,))
+    await _db.commit()
+
+
 async def set_name(user_id: int, name: str) -> None:
     await _db.execute(
         "UPDATE registrations SET name=?, updated_at=? WHERE user_id=?",

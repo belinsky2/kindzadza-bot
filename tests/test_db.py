@@ -40,6 +40,21 @@ async def test_ensure_user_preserves_status(fresh_db):
     assert reg["status"] == db.STATUS_CONFIRMED_ONLINE
 
 
+# ==================== delete_registration ====================
+
+async def test_delete_registration_removes_record(fresh_db):
+    await db.ensure_user(5, "user5")
+    await db.set_order(5, 2, "vnd", "400 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    await db.delete_registration(5)
+    assert await db.get_registration(5) is None
+
+
+async def test_delete_registration_missing_is_noop(fresh_db):
+    # удаление несуществующей записи не должно падать
+    await db.delete_registration(999)
+    assert await db.get_registration(999) is None
+
+
 async def test_ensure_user_multiple(fresh_db):
     for uid in range(10, 15):
         await db.ensure_user(uid, f"user{uid}")

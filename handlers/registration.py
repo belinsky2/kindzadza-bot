@@ -58,7 +58,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
 
     if reg and reg.get("status") in RETURNING_STATUSES:
         await message.answer(
-            texts.status_view(reg) + "\n\nХочешь что-то изменить — кнопка ниже 👇",
+            texts.status_view(reg) + texts.RETURNING_HINT,
             reply_markup=kb.returning_kb(reg["status"]),
             disable_web_page_preview=True,
         )
@@ -83,6 +83,14 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
 async def cmd_status(message: Message) -> None:
     reg = await db.get_registration(message.from_user.id)
     await message.answer(texts.status_view(reg), disable_web_page_preview=True)
+
+
+@router.message(Command("reset"))
+async def cmd_reset(message: Message, state: FSMContext) -> None:
+    """Сброс регистрации: удаляет запись и состояние, /start начнётся заново."""
+    await state.clear()
+    await db.delete_registration(message.from_user.id)
+    await message.answer(texts.RESET_DONE)
 
 
 # ---------- Регистрация: имя ----------

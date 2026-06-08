@@ -25,6 +25,7 @@ async def _set_commands(bot: Bot) -> None:
     await bot.set_my_commands([
         BotCommand(command="start", description="Начать / регистрация"),
         BotCommand(command="status", description="Мой статус и номера розыгрыша"),
+        BotCommand(command="reset", description="Сбросить регистрацию и начать заново"),
     ])
 
 
