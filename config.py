@@ -95,7 +95,14 @@ CONTENT_DIR: str = os.getenv("CONTENT_DIR", "content").strip()
 ANNOUNCE_IMAGE: str = os.path.join(CONTENT_DIR, "announce.jpg")
 MENU_IMAGE: str = os.path.join(CONTENT_DIR, "menu.jpg")
 PAYMENT_QR_VND: str = os.path.join(CONTENT_DIR, "payment_qr_vnd.jpg")
+PAYMENT_QR_USDT: str = os.path.join(CONTENT_DIR, "payment_qr_usdt.jpg")
 POSTS_DIR: str = os.path.join(CONTENT_DIR, "posts")
+
+# Картинка-QR для способа оплаты (отправляется после реквизитов, если файл есть)
+PAYMENT_QR_IMAGE = {
+    "vnd": PAYMENT_QR_VND,
+    "usdt": PAYMENT_QR_USDT,
+}
 
 
 def format_amount(method: str, qty: int = 1) -> str:

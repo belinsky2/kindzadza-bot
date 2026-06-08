@@ -181,8 +181,9 @@ async def on_pay(call: CallbackQuery, state: FSMContext) -> None:
     await db.set_order(user_id, qty, method, amount, db.STATUS_AWAITING_PAYMENT)
     await state.set_state(Form.waiting_screenshot)
     await call.message.answer(texts.requisites(method, qty), reply_markup=kb.waiting_kb())
-    if method == "vnd" and os.path.exists(config.PAYMENT_QR_VND):
-        await call.message.answer_photo(FSInputFile(config.PAYMENT_QR_VND))
+    qr_path = config.PAYMENT_QR_IMAGE.get(method)
+    if qr_path and os.path.exists(qr_path):
+        await call.message.answer_photo(FSInputFile(qr_path))
 
 
 @router.callback_query(F.data == "to_online")
