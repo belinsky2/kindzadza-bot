@@ -57,8 +57,14 @@ def payment_kb(sold_out: bool) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     if not sold_out:
         for key in config.ONLINE_METHODS:
-            kb.button(text=config.PAYMENT_METHODS[key]["label"], callback_data=f"pay:{key}")
-    kb.button(text=config.PAYMENT_METHODS["door"]["label"], callback_data="pay:door")
+            m = config.PAYMENT_METHODS[key]
+            label = f"{m['label']}  ·  {config.format_amount(key, 1)}"
+            kb.button(text=label, callback_data=f"pay:{key}")
+    door = config.PAYMENT_METHODS["door"]
+    kb.button(
+        text=f"{door['label']}  ·  {config.format_amount('door', 1)}",
+        callback_data="pay:door",
+    )
     contact = _contact_button()
     if contact:
         kb.row(contact)

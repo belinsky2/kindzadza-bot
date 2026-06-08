@@ -46,21 +46,13 @@ QTY_BAD = "Нужно число от 1 до {max}. Попробуй ещё ра
 
 
 def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
+    head = f"🎟 Билетов: <b>{qty}</b>\n\n"
     if not sold_out:
-        price_line = (
-            f"💰 Итого: 🇻🇳 {config.format_amount('vnd', qty)} · "
-            f"🇷🇺 {config.format_amount('rub', qty)} · "
-            f"🪙 {config.format_amount('usdt', qty)}\n\n"
+        head += (
+            "💳 Оплати <b>онлайн</b> – гарантируешь место и участвуешь в "
+            "розыгрыше десертов 🎂.\n"
+            "📍 При оплате на месте место <b>не гарантировано</b>.\n"
         )
-    else:
-        price_line = ""
-    head = (
-        f"🎟 Билетов: <b>{qty}</b>\n"
-        f"{price_line}"
-        "💳 Оплати <b>онлайн</b> – гарантируешь место и участвуешь в "
-        "розыгрыше десертов 🎂.\n"
-        "📍 При оплате на месте место <b>не гарантировано</b>.\n"
-    )
     if scarcity:
         head += f"\n{scarcity}\n"
     if sold_out:
@@ -68,7 +60,7 @@ def payment_choice(qty: int, scarcity: str | None, sold_out: bool) -> str:
             "\n⚠️ Онлайн-места закончились (аншлаг). Осталась только оплата на месте –\n"
             "без гарантии места."
         )
-    head += "\nВыбери способ оплаты:"
+    head += "\n👇 Выбери способ оплаты (цена за 1 билет на кнопке):"
     return head
 
 
