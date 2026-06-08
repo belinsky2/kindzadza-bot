@@ -108,7 +108,8 @@ async def test_confirm_no_qr_without_bot_username(fresh_db):
     bot = make_bot()
 
     with patch("sheets.sync_registration", new=AsyncMock()), \
-         patch("config.BOT_USERNAME", ""):  # нет username → нет QR
+         patch("config.BOT_USERNAME", ""), \
+         patch("config.MENU_IMAGE", "/nonexistent/menu.jpg"):  # нет username → нет QR, нет меню
         await on_admin_decision(call, bot)
 
     # Подтверждение текстом есть, QR нет

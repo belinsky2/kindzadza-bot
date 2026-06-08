@@ -9,5 +9,7 @@ __pycache__/
 .venv/
 venv/
 content/announce.jpg
+content/menu.jpg
+content/payment_qr_vnd.jpg
 content/posts/*
 !content/posts/.gitkeep

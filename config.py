@@ -94,6 +94,7 @@ DB_PATH: str = os.getenv("DB_PATH", "bot.db").strip()
 CONTENT_DIR: str = os.getenv("CONTENT_DIR", "content").strip()
 ANNOUNCE_IMAGE: str = os.path.join(CONTENT_DIR, "announce.jpg")
 MENU_IMAGE: str = os.path.join(CONTENT_DIR, "menu.jpg")
+PAYMENT_QR_VND: str = os.path.join(CONTENT_DIR, "payment_qr_vnd.jpg")
 POSTS_DIR: str = os.path.join(CONTENT_DIR, "posts")
 
 
