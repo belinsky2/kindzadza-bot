@@ -6,7 +6,7 @@ import logging
 import os
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, FSInputFile, Message
@@ -242,3 +242,25 @@ async def on_screenshot(message: Message, state: FSMContext, bot: Bot) -> None:
 @router.message(Form.waiting_screenshot)
 async def on_screenshot_wrong(message: Message) -> None:
     await message.answer(texts.ask_screenshot_again())
+
+
+# ---------- Свободные сообщения вне воронки: заказ еды ----------
+
+# Статусы, при которых текстовое сообщение трактуется как заказ еды
+ORDER_STATUSES = (db.STATUS_CONFIRMED_ONLINE, db.STATUS_DOOR)
+
+
+@router.message(StateFilter(None), F.text)
+async def on_free_text(message: Message) -> None:
+    """Любое сообщение от гостя вне воронки. Для оплативших – это заказ еды."""
+    text = message.text.strip()
+    if text.startswith("/"):
+        return  # неизвестная команда — игнорируем
+    reg = await db.get_registration(message.from_user.id)
+    if not reg or reg.get("status") not in ORDER_STATUSES:
+        await message.answer(texts.FREE_TEXT_HINT)
+        return
+    order = await db.append_food_order(message.from_user.id, text)
+    reg = await db.get_registration(message.from_user.id)
+    asyncio.create_task(sheets.sync_registration(reg))
+    await message.answer(texts.food_order_saved(order))

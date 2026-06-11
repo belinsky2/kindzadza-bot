@@ -157,6 +157,20 @@ async def set_raffle_numbers(user_id: int, numbers: list[int]) -> None:
     await _db.commit()
 
 
+async def append_food_order(user_id: int, text: str) -> str:
+    """Дозаписывает сообщение к заказу (с новой строки). Возвращает полный заказ."""
+    reg = await get_registration(user_id)
+    prev = ((reg.get("food_order") if reg else None) or "").strip()
+    text = text.strip()
+    combined = f"{prev}\n{text}".strip() if prev else text
+    await _db.execute(
+        "UPDATE registrations SET food_order=?, updated_at=? WHERE user_id=?",
+        (combined, _now(), user_id),
+    )
+    await _db.commit()
+    return combined
+
+
 # ---------- Билеты / check-in ----------
 
 async def set_ticket_code(user_id: int, code: str) -> None:

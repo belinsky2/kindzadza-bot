@@ -69,6 +69,7 @@ async def on_admin_decision(call: CallbackQuery, bot: Bot) -> None:
                     FSInputFile(config.MENU_IMAGE),
                     caption=texts.menu_promo(),
                 )
+            await bot.send_message(user_id, texts.ASK_FOOD_ORDER)
         except Exception:
             log.exception("Не удалось уведомить пользователя %s о подтверждении", user_id)
         await _mark_card(call, f"✅ Подтвердил {actor} · номера: "

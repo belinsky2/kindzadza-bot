@@ -19,6 +19,7 @@ from handlers.registration import (
     on_screenshot_wrong,
     on_to_online,
     on_resend,
+    on_free_text,
     Form,
 )
 from tests.conftest import make_message, make_callback, make_state, make_command, make_bot
@@ -614,3 +615,71 @@ async def test_resend_sets_waiting_screenshot_state(fresh_db):
     call.answer.assert_awaited()
     state.set_state.assert_awaited_once_with(Form.waiting_screenshot)
     call.message.answer.assert_awaited_once()
+
+
+# ==================== on_free_text (заказ еды) ====================
+
+async def test_free_text_saves_order_for_paid(fresh_db):
+    uid = 800
+    await db.ensure_user(uid, "u800")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, text="2 хачапури и лимонад")
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_free_text(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg["food_order"] == "2 хачапури и лимонад"
+    msg.answer.assert_awaited_once()
+
+
+async def test_free_text_appends_multiple_orders(fresh_db):
+    uid = 801
+    await db.ensure_user(uid, "u801")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_free_text(make_message(user_id=uid, text="хачапури"))
+        await on_free_text(make_message(user_id=uid, text="и вино"))
+
+    reg = await db.get_registration(uid)
+    assert reg["food_order"] == "хачапури\nи вино"
+
+
+async def test_free_text_door_guest_saves_order(fresh_db):
+    uid = 802
+    await db.ensure_user(uid, "u802")
+    await db.set_order(uid, 1, "door", "300 000 ₫", db.STATUS_DOOR)
+
+    msg = make_message(user_id=uid, text="шашлык")
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_free_text(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg["food_order"] == "шашлык"
+
+
+async def test_free_text_unregistered_gets_hint(fresh_db):
+    uid = 803
+    await db.ensure_user(uid, "u803")  # статус new
+
+    msg = make_message(user_id=uid, text="привет")
+    await on_free_text(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg.get("food_order") is None
+    msg.answer.assert_awaited_once()
+
+
+async def test_free_text_ignores_unknown_command(fresh_db):
+    uid = 804
+    await db.ensure_user(uid, "u804")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, text="/foobar")
+    await on_free_text(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg.get("food_order") is None
+    msg.answer.assert_not_awaited()
