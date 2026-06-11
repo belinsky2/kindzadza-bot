@@ -100,6 +100,15 @@ async def _mark_card(call: CallbackQuery, note: str) -> None:
         log.debug("Не удалось обновить карточку (необязательно).")
 
 
+# ---------- /guests ----------
+
+@router.message(Command("guests"))
+async def cmd_guests(message: Message) -> None:
+    regs = await db.get_all_registrations()
+    for page in texts.guests_list(regs):
+        await message.answer(page)
+
+
 # ---------- /stats ----------
 
 @router.message(Command("stats"))

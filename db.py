@@ -294,3 +294,12 @@ async def count_unpublished_posts() -> int:
     cur = await _db.execute("SELECT COUNT(*) AS c FROM posts WHERE published=0")
     row = await cur.fetchone()
     return int(row["c"])
+
+
+async def get_all_registrations() -> list[dict]:
+    """Все записи кроме 'new', отсортированные по дате создания."""
+    cur = await _db.execute(
+        "SELECT * FROM registrations WHERE status != ? ORDER BY created_at",
+        (STATUS_NEW,),
+    )
+    return [dict(r) for r in await cur.fetchall()]

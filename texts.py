@@ -284,6 +284,57 @@ def reminder_not_paid(when: str) -> str:
     )
 
 
+# ===================== /guests =====================
+
+_GUEST_ICONS = {
+    "awaiting_payment": "💳",
+    "awaiting_confirmation": "⏳",
+    "confirmed_online": "✅",
+    "door": "📍",
+    "rejected": "❌",
+}
+
+_STATUS_SHORT = {
+    "awaiting_payment": "не оплатил",
+    "awaiting_confirmation": "ждёт подтв.",
+    "confirmed_online": "оплатил",
+    "door": "на месте",
+    "rejected": "отклонён",
+}
+
+
+def guests_list(regs: list[dict]) -> list[str]:
+    """Форматирует список гостей. Возвращает страницы ≤4000 символов."""
+    if not regs:
+        return ["Гостей пока нет."]
+    confirmed_qty = sum((r.get("qty") or 0) for r in regs if r["status"] == "confirmed_online")
+    confirmed_cnt = sum(1 for r in regs if r["status"] == "confirmed_online")
+    header = (
+        f"📋 <b>Гости</b> · {confirmed_cnt} чел. оплатили · {confirmed_qty} билетов\n\n"
+    )
+    lines = []
+    for r in regs:
+        icon = _GUEST_ICONS.get(r["status"], "❓")
+        name = r.get("name") or "–"
+        uname = f" @{r['username']}" if r.get("username") else ""
+        qty = r.get("qty") or 1
+        nums = r.get("raffle_numbers") or ""
+        nums_str = f" · №{nums}" if nums else ""
+        checkin = " ✔️" if r.get("checked_in_at") else ""
+        status_str = _STATUS_SHORT.get(r["status"], r["status"])
+        lines.append(f"{icon} {name}{uname} — {qty} бил. · {status_str}{nums_str}{checkin}")
+    pages, current = [], header
+    for line in lines:
+        if len(current) + len(line) + 1 > 4000:
+            pages.append(current)
+            current = line + "\n"
+        else:
+            current += line + "\n"
+    if current:
+        pages.append(current)
+    return pages
+
+
 # ===================== CTA ДЛЯ ПОСТОВ (по сегментам) =====================
 
 def menu_promo() -> str:
