@@ -1,6 +1,7 @@
 """FSM-воронка пользователя: /start → имя → кол-во → оплата → скрин, + /status."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -55,6 +56,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         return
 
     reg = await db.get_registration(user.id)
+
+    # зеркалим вход в Google Таблицу (фоном, не задерживая ответ)
+    if reg:
+        asyncio.create_task(sheets.sync_registration(reg))
 
     if reg and reg.get("status") in RETURNING_STATUSES:
         await message.answer(

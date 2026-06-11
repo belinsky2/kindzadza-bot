@@ -109,6 +109,27 @@ async def cmd_guests(message: Message) -> None:
         await message.answer(page)
 
 
+# ---------- /sync_sheets ----------
+
+@router.message(Command("sync_sheets"))
+async def cmd_sync_sheets(message: Message) -> None:
+    if not config.SPREADSHEET_ID:
+        await message.answer(
+            "Google Таблица не подключена: задай SPREADSHEET_ID в .env и перезапусти бота."
+        )
+        return
+    await message.answer("Синхронизирую всех гостей в таблицу…")
+    regs = await db.get_all_registrations(include_new=True)
+    n = await sheets.sync_all(regs)
+    if n < 0:
+        await message.answer(
+            "Не удалось записать в таблицу. Проверь credentials.json и доступ "
+            "сервисного аккаунта к таблице."
+        )
+    else:
+        await message.answer(f"Готово – в таблице {n} строк (включая «просто зашли»).")
+
+
 # ---------- /stats ----------
 
 @router.message(Command("stats"))

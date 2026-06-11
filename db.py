@@ -296,10 +296,17 @@ async def count_unpublished_posts() -> int:
     return int(row["c"])
 
 
-async def get_all_registrations() -> list[dict]:
-    """Все записи кроме 'new', отсортированные по дате создания."""
-    cur = await _db.execute(
-        "SELECT * FROM registrations WHERE status != ? ORDER BY created_at",
-        (STATUS_NEW,),
-    )
+async def get_all_registrations(include_new: bool = False) -> list[dict]:
+    """Записи, отсортированные по дате создания.
+
+    include_new=False — без «просто зашёл» (для /guests).
+    include_new=True — вообще все (для Google Таблицы).
+    """
+    if include_new:
+        cur = await _db.execute("SELECT * FROM registrations ORDER BY created_at")
+    else:
+        cur = await _db.execute(
+            "SELECT * FROM registrations WHERE status != ? ORDER BY created_at",
+            (STATUS_NEW,),
+        )
     return [dict(r) for r in await cur.fetchall()]

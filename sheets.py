@@ -64,11 +64,19 @@ def _init_sync() -> bool:
         return False
 
 
+def _fmt_ts(ts) -> str:
+    if not ts:
+        return ""
+    try:
+        return datetime.fromtimestamp(int(ts), config.TZ).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, OSError, TypeError):
+        return ""
+
+
 def _row_from_reg(reg: dict) -> list:
     nums = reg.get("raffle_numbers") or ""
     method = reg.get("payment_method") or ""
     method_label = config.PAYMENT_METHODS.get(method, {}).get("label", method)
-    now = datetime.now(config.TZ).strftime("%Y-%m-%d %H:%M")
     return [
         str(reg["user_id"]),
         reg.get("name") or "",
@@ -78,8 +86,8 @@ def _row_from_reg(reg: dict) -> list:
         reg.get("amount") or "",
         STATUS_LABELS.get(reg.get("status"), reg.get("status") or ""),
         nums,
-        now if reg.get("status") in (None, "new") else "",
-        now,
+        _fmt_ts(reg.get("created_at")),
+        _fmt_ts(reg.get("updated_at")),
     ]
 
 
@@ -93,10 +101,6 @@ def _upsert_sync(reg: dict) -> None:
         col = ws.col_values(1)  # колонка user_id
         if uid in col:
             idx = col.index(uid) + 1  # 1-based
-            # сохраняем «Создано», если уже было
-            created = ws.cell(idx, 9).value
-            if created:
-                row[8] = created
             ws.update(f"A{idx}", [row])
         else:
             ws.append_row(row, value_input_option="USER_ENTERED")
@@ -104,6 +108,26 @@ def _upsert_sync(reg: dict) -> None:
         log.exception("Ошибка записи в Google Таблицу для user_id=%s", uid)
 
 
+def _rewrite_all_sync(regs: list[dict]) -> int:
+    """Полностью перезаписывает лист: заголовок + все строки. Возвращает кол-во строк."""
+    if not _init_sync():
+        return -1
+    ws = _worksheet
+    rows = [HEADER] + [_row_from_reg(r) for r in regs]
+    try:
+        ws.clear()
+        ws.update("A1", rows, value_input_option="USER_ENTERED")
+        return len(regs)
+    except Exception:
+        log.exception("Ошибка массовой записи в Google Таблицу")
+        return -1
+
+
 async def sync_registration(reg: dict) -> None:
     """Upsert строки регистрации по user_id. Безопасно вызывать всегда."""
     await asyncio.to_thread(_upsert_sync, reg)
+
+
+async def sync_all(regs: list[dict]) -> int:
+    """Полная перезалив­ка всех регистраций. -1 если Sheets отключены/ошибка."""
+    return await asyncio.to_thread(_rewrite_all_sync, regs)
