@@ -17,6 +17,7 @@ from handlers.registration import (
     on_pay,
     on_screenshot,
     on_screenshot_wrong,
+    on_screenshot_stateless,
     on_to_online,
     on_resend,
     on_free_text,
@@ -586,6 +587,67 @@ async def test_screenshot_wrong_type_asks_again(fresh_db):
     msg = make_message(user_id=610, text="это не скрин")
     await on_screenshot_wrong(msg)
     msg.answer.assert_awaited_once()
+
+
+# ==================== on_screenshot_stateless (после рестарта) ====================
+
+async def test_stateless_screenshot_awaiting_payment_accepted(fresh_db):
+    """Скрин без FSM-состояния от ждущего оплаты — принимается и уходит оргам."""
+    uid = 620
+    await db.ensure_user(uid, "user620")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_AWAITING_PAYMENT)
+
+    photo_mock = [MagicMock()]
+    photo_mock[-1].file_id = "ph_id"
+    msg = make_message(user_id=uid, username="user620", photo=photo_mock)
+    state = make_state()
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_screenshot_stateless(msg, state, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_AWAITING_CONFIRMATION
+    bot.send_photo.assert_awaited_once()
+    msg.answer.assert_awaited_once()
+
+
+async def test_stateless_screenshot_rejected_accepted(fresh_db):
+    uid = 621
+    await db.ensure_user(uid, "user621")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_REJECTED)
+
+    doc_mock = MagicMock()
+    doc_mock.file_id = "doc_id"
+    msg = make_message(user_id=uid, username="user621", photo=None, document=doc_mock)
+    state = make_state()
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_screenshot_stateless(msg, state, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_AWAITING_CONFIRMATION
+
+
+async def test_stateless_screenshot_confirmed_ignored(fresh_db):
+    """Фото от уже подтверждённого гостя не трактуется как новый скрин."""
+    uid = 622
+    await db.ensure_user(uid, "user622")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    photo_mock = [MagicMock()]
+    photo_mock[-1].file_id = "ph_id"
+    msg = make_message(user_id=uid, username="user622", photo=photo_mock)
+    state = make_state()
+    bot = make_bot()
+
+    await on_screenshot_stateless(msg, state, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE  # без изменений
+    bot.send_photo.assert_not_awaited()
+    msg.answer.assert_not_awaited()
 
 
 # ==================== on_to_online / on_resend ====================

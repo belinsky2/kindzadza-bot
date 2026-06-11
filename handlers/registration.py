@@ -209,8 +209,12 @@ async def on_resend(call: CallbackQuery, state: FSMContext) -> None:
 
 # ---------- Скрин оплаты ----------
 
-@router.message(Form.waiting_screenshot, F.photo | F.document)
-async def on_screenshot(message: Message, state: FSMContext, bot: Bot) -> None:
+# Статусы, при которых присланное фото/документ трактуется как скрин оплаты
+SCREENSHOT_STATUSES = (db.STATUS_AWAITING_PAYMENT, db.STATUS_REJECTED)
+
+
+async def _accept_screenshot(message: Message, state: FSMContext, bot: Bot) -> None:
+    """Принимает скрин оплаты: бронь места + карточка оргам. Не зависит от FSM."""
     user_id = message.from_user.id
     # бронируем место
     await db.update_status(user_id, db.STATUS_AWAITING_CONFIRMATION)
@@ -239,9 +243,26 @@ async def on_screenshot(message: Message, state: FSMContext, bot: Bot) -> None:
     await message.answer(texts.screenshot_received(), reply_markup=kb.waiting_kb())
 
 
+@router.message(Form.waiting_screenshot, F.photo | F.document)
+async def on_screenshot(message: Message, state: FSMContext, bot: Bot) -> None:
+    await _accept_screenshot(message, state, bot)
+
+
 @router.message(Form.waiting_screenshot)
 async def on_screenshot_wrong(message: Message) -> None:
     await message.answer(texts.ask_screenshot_again())
+
+
+@router.message(StateFilter(None), F.photo | F.document)
+async def on_screenshot_stateless(message: Message, state: FSMContext, bot: Bot) -> None:
+    """Скрин, присланный вне FSM (например, после перезапуска бота).
+
+    Опираемся на статус в базе, а не на состояние в памяти — поэтому рестарты
+    бота больше не «теряют» присланные скрины оплаты.
+    """
+    reg = await db.get_registration(message.from_user.id)
+    if reg and reg.get("status") in SCREENSHOT_STATUSES:
+        await _accept_screenshot(message, state, bot)
 
 
 # ---------- Свободные сообщения вне воронки: заказ еды ----------
