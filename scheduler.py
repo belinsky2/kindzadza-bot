@@ -21,9 +21,7 @@ log = logging.getLogger(__name__)
 # ---------- Ежедневный пост ----------
 
 async def _send_post_to(bot: Bot, uid: int, post: dict, scarcity: str | None) -> None:
-    reg = await db.get_registration(uid)
-    seg = segments.segment_of(reg["status"]) if reg else None
-    caption = (post["caption"] or "") + texts.post_cta(seg, scarcity)
+    caption = post["caption"] or ""
     fp = post["file_path"]
     if fp:
         photo = FSInputFile(fp) if os.path.exists(fp) else fp  # путь или file_id
