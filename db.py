@@ -82,6 +82,7 @@ async def _migrate() -> None:
         ("ticket_code", "ticket_code TEXT"),
         ("checked_in_at", "checked_in_at INTEGER"),
         ("arrived_count", "arrived_count INTEGER"),
+        ("food_order", "food_order TEXT"),
     ):
         if col not in cols:
             await _db.execute(f"ALTER TABLE registrations ADD COLUMN {ddl}")
