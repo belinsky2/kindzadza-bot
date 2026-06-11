@@ -362,6 +362,17 @@ def food_order_saved(order: str) -> str:
     )
 
 
+def kitchen_order_card(reg: dict) -> str:
+    uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
+    order = reg.get("food_order") or ""
+    return (
+        "🍽 <b>Заказ еды</b>\n\n"
+        f"👤 {reg.get('name', '–')} ({uname})\n"
+        f"🎟 Билетов: {reg.get('qty', 1)}\n\n"
+        f"📋 Заказ:\n{order}"
+    )
+
+
 # Подсказка на свободный текст от незарегистрированных/не оплативших
 FREE_TEXT_HINT = "Чтобы зарегистрироваться на концерт, нажми /start 👇"
 

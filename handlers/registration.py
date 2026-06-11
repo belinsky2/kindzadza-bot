@@ -251,7 +251,7 @@ ORDER_STATUSES = (db.STATUS_CONFIRMED_ONLINE, db.STATUS_DOOR)
 
 
 @router.message(StateFilter(None), F.text)
-async def on_free_text(message: Message) -> None:
+async def on_free_text(message: Message, bot: Bot) -> None:
     """Любое сообщение от гостя вне воронки. Для оплативших – это заказ еды."""
     text = message.text.strip()
     if text.startswith("/"):
@@ -264,3 +264,8 @@ async def on_free_text(message: Message) -> None:
     reg = await db.get_registration(message.from_user.id)
     asyncio.create_task(sheets.sync_registration(reg))
     await message.answer(texts.food_order_saved(order))
+    if config.ADMIN_GROUP_ID:
+        try:
+            await bot.send_message(config.ADMIN_GROUP_ID, texts.kitchen_order_card(reg))
+        except Exception:
+            log.exception("Не удалось отправить заказ еды в админ-группу")

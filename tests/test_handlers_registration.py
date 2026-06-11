@@ -625,9 +625,11 @@ async def test_free_text_saves_order_for_paid(fresh_db):
     await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
 
     msg = make_message(user_id=uid, text="2 хачапури и лимонад")
+    bot = make_bot()
 
-    with patch("sheets.sync_registration", new=AsyncMock()):
-        await on_free_text(msg)
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", 0):
+        await on_free_text(msg, bot)
 
     reg = await db.get_registration(uid)
     assert reg["food_order"] == "2 хачапури и лимонад"
@@ -638,10 +640,12 @@ async def test_free_text_appends_multiple_orders(fresh_db):
     uid = 801
     await db.ensure_user(uid, "u801")
     await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    bot = make_bot()
 
-    with patch("sheets.sync_registration", new=AsyncMock()):
-        await on_free_text(make_message(user_id=uid, text="хачапури"))
-        await on_free_text(make_message(user_id=uid, text="и вино"))
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", 0):
+        await on_free_text(make_message(user_id=uid, text="хачапури"), bot)
+        await on_free_text(make_message(user_id=uid, text="и вино"), bot)
 
     reg = await db.get_registration(uid)
     assert reg["food_order"] == "хачапури\nи вино"
@@ -653,8 +657,10 @@ async def test_free_text_door_guest_saves_order(fresh_db):
     await db.set_order(uid, 1, "door", "300 000 ₫", db.STATUS_DOOR)
 
     msg = make_message(user_id=uid, text="шашлык")
-    with patch("sheets.sync_registration", new=AsyncMock()):
-        await on_free_text(msg)
+    bot = make_bot()
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", 0):
+        await on_free_text(msg, bot)
 
     reg = await db.get_registration(uid)
     assert reg["food_order"] == "шашлык"
@@ -665,7 +671,8 @@ async def test_free_text_unregistered_gets_hint(fresh_db):
     await db.ensure_user(uid, "u803")  # статус new
 
     msg = make_message(user_id=uid, text="привет")
-    await on_free_text(msg)
+    bot = make_bot()
+    await on_free_text(msg, bot)
 
     reg = await db.get_registration(uid)
     assert reg.get("food_order") is None
@@ -678,8 +685,27 @@ async def test_free_text_ignores_unknown_command(fresh_db):
     await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
 
     msg = make_message(user_id=uid, text="/foobar")
-    await on_free_text(msg)
+    bot = make_bot()
+    await on_free_text(msg, bot)
 
     reg = await db.get_registration(uid)
     assert reg.get("food_order") is None
     msg.answer.assert_not_awaited()
+
+
+async def test_free_text_notifies_admin_group(fresh_db):
+    uid = 805
+    await db.ensure_user(uid, "u805")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, text="люля-кебаб")
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", -100500):
+        await on_free_text(msg, bot)
+
+    bot.send_message.assert_awaited_once()
+    call_args = bot.send_message.call_args[0]
+    assert call_args[0] == -100500
+    assert "люля-кебаб" in call_args[1]
