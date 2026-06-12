@@ -253,7 +253,7 @@ async def on_screenshot_wrong(message: Message) -> None:
     await message.answer(texts.ask_screenshot_again())
 
 
-@router.message(StateFilter(None), F.photo | F.document)
+@router.message(StateFilter(None), F.chat.type == "private", F.photo | F.document)
 async def on_screenshot_stateless(message: Message, state: FSMContext, bot: Bot) -> None:
     """Скрин, присланный вне FSM (например, после перезапуска бота).
 
@@ -271,7 +271,7 @@ async def on_screenshot_stateless(message: Message, state: FSMContext, bot: Bot)
 ORDER_STATUSES = (db.STATUS_CONFIRMED_ONLINE, db.STATUS_DOOR)
 
 
-@router.message(StateFilter(None), F.text)
+@router.message(StateFilter(None), F.chat.type == "private", F.text)
 async def on_free_text(message: Message, bot: Bot) -> None:
     """Любое сообщение от гостя вне воронки. Для оплативших – это заказ еды."""
     text = message.text.strip()
