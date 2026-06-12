@@ -60,10 +60,50 @@ async def process_scan(message: Message, bot: Bot, code: str) -> None:
         texts.checkin_card(reg, arrived, remaining),
         reply_markup=kb.checkin_arrived_kb(code, remaining),
     )
-    # На первом сканировании отдаём заказ еды отдельным сообщением —
-    # его билетер пересылает на кухню, если гости подтвердили заказ.
+    # На первом сканировании отдаём заказ еды отдельным сообщением с кнопкой —
+    # билетер отправляет его на кухню, если гости подтвердили заказ.
     if arrived == 0 and (reg.get("food_order") or "").strip():
-        await message.answer(texts.kitchen_order_card(reg))
+        await message.answer(
+            texts.kitchen_order_card(reg),
+            reply_markup=kb.kitchen_send_kb(reg["user_id"]),
+        )
+
+
+@router.callback_query(F.data.startswith("kit:"))
+async def on_send_to_kitchen(call: CallbackQuery, bot: Bot) -> None:
+    """Билетер нажал «Отправить на кухню» — пересылаем заказ Артуру/в кухонный чат."""
+    uid = int(call.data.split(":", 1)[1])
+    if not await is_staff(bot, call.from_user.id):
+        await call.answer("Отправлять на кухню могут только организаторы", show_alert=True)
+        return
+
+    reg = await db.get_registration(uid)
+    if not reg or not (reg.get("food_order") or "").strip():
+        await call.answer("Заказ не найден", show_alert=True)
+        return
+
+    # Куда слать: явный KITCHEN_CHAT_ID или chat_id Артура по нику (если он запускал бота)
+    target = config.KITCHEN_CHAT_ID
+    if not target and config.KITCHEN_USERNAME:
+        krec = await db.get_by_username(config.KITCHEN_USERNAME)
+        target = krec["user_id"] if krec else 0
+    if not target:
+        await call.answer(texts.kitchen_not_configured(), show_alert=True)
+        return
+
+    try:
+        await bot.send_message(target, texts.kitchen_order_card(reg))
+    except Exception:
+        log.exception("Не удалось отправить заказ на кухню (target=%s)", target)
+        await call.answer(texts.kitchen_send_failed(), show_alert=True)
+        return
+
+    await call.answer("Отправлено на кухню ✅")
+    try:
+        base = call.message.text or call.message.caption or ""
+        await call.message.edit_text(f"{base}\n\n✅ Отправлено на кухню", reply_markup=None)
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("ci:"))

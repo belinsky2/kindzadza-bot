@@ -124,6 +124,14 @@ def checkin_arrived_kb(code: str, remaining: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def kitchen_send_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Кнопка билетера: отправить заказ еды на кухню."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🍽 Отправить на кухню", callback_data=f"kit:{user_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def broadcast_segment_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Купили онлайн", callback_data="bc:paid")

@@ -271,11 +271,10 @@ def checkin_card(reg: dict, arrived: int, remaining: int) -> str:
     food = (reg.get("food_order") or "").strip()
     food_block = ""
     if arrived == 0 and food:
-        kitchen = f"@{config.KITCHEN_USERNAME}" if config.KITCHEN_USERNAME else "на кухню"
         food_block = (
             "\n🍽 <b>У гостя есть предзаказ еды</b> – он отдельным сообщением ниже.\n"
             "Уточни у гостей, всё ли верно:\n"
-            f"• всё верно → перешли заказ {kitchen} (кухня начнёт готовить);\n"
+            "• всё верно → нажми «🍽 Отправить на кухню» под заказом;\n"
             "• заказ другой → позови официанта для уточнения.\n"
         )
     return (
@@ -442,6 +441,19 @@ def kitchen_order_card(reg: dict) -> str:
         f"👤 {reg.get('name', '–')} ({uname})\n"
         f"🎟 Билетов: {reg.get('qty', 1)}\n\n"
         f"📋 Заказ:\n{order}"
+    )
+
+
+def kitchen_not_configured() -> str:
+    uname = f"@{config.KITCHEN_USERNAME}" if config.KITCHEN_USERNAME else "кухне"
+    return f"Кухня не настроена в боте. Перешли заказ вручную {uname}."
+
+
+def kitchen_send_failed() -> str:
+    uname = f"@{config.KITCHEN_USERNAME}" if config.KITCHEN_USERNAME else "кухне"
+    return (
+        "Не удалось отправить: кухня ещё не запустила бота. "
+        f"Перешли заказ вручную {uname}."
     )
 
 

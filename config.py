@@ -33,6 +33,9 @@ BOT_USERNAME: str = os.getenv("BOT_USERNAME", "").strip().lstrip("@")
 ORGANIZER_USERNAME: str = os.getenv("ORGANIZER_USERNAME", "").strip().lstrip("@")
 # Ник того, кому билетер пересылает заказ еды на кухню (без @).
 KITCHEN_USERNAME: str = os.getenv("KITCHEN_USERNAME", "reap_of_dea").strip().lstrip("@")
+# Чат/пользователь, куда уходит заказ по кнопке «Отправить на кухню».
+# 0 → бот найдёт chat_id по KITCHEN_USERNAME (Артур должен был запустить бота).
+KITCHEN_CHAT_ID: int = _int("KITCHEN_CHAT_ID", 0)
 # Доп. список user_id оргов для check-in (через запятую). Необязательно —
 # по умолчанию права определяются членством в ADMIN_GROUP_ID.
 ADMIN_IDS: set[int] = {

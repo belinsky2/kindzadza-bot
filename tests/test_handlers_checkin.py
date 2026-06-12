@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import config
 import db
-from handlers.checkin import process_scan, on_checkin, is_staff
+from handlers.checkin import process_scan, on_checkin, on_send_to_kitchen, is_staff
 from tests.conftest import make_message, make_callback, make_bot
 
 
@@ -141,12 +141,13 @@ async def test_process_scan_shows_food_order_for_kitchen(fresh_db, monkeypatch):
 
     await process_scan(msg, bot, "FOOD_CODE")
 
-    # два сообщения: карточка check-in + пересылаемый заказ на кухню
+    # два сообщения: карточка check-in + заказ с кнопкой «Отправить на кухню»
     assert msg.answer.await_count == 2
     card_text = msg.answer.await_args_list[0].args[0]
-    assert "reap_of_dea" in card_text  # инструкция переслать заказ на кухню
-    order_text = msg.answer.await_args_list[1].args[0]
-    assert "хачапури" in order_text
+    assert "кухн" in card_text.lower()  # инструкция про отправку на кухню
+    order_call = msg.answer.await_args_list[1]
+    assert "хачапури" in order_call.args[0]
+    assert "reply_markup" in order_call.kwargs  # кнопка отправки
 
 
 async def test_process_scan_no_food_order_no_extra_message(fresh_db, monkeypatch):
@@ -185,6 +186,86 @@ async def test_process_scan_rescan_no_food_reminder(fresh_db, monkeypatch):
     msg.answer.assert_awaited_once()
     card_text = msg.answer.await_args_list[0].args[0]
     assert "reap_of_dea" not in card_text
+
+
+# ==================== on_send_to_kitchen ====================
+
+async def test_send_to_kitchen_resolves_username(fresh_db, monkeypatch):
+    # Артур запустил бота → есть его запись
+    await db.ensure_user(7001, "reap_of_dea")
+    uid = 420
+    await db.ensure_user(uid, "g420")
+    await db.set_name(uid, "Гость")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.append_food_order(uid, "хачапури, люля")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_CHAT_ID", 0)
+    monkeypatch.setattr(config, "KITCHEN_USERNAME", "reap_of_dea")
+
+    call = make_callback(data=f"kit:{uid}", user_id=9999, username="org")
+    call.message.text = "🍽 Заказ еды ..."
+    call.message.edit_text = AsyncMock()
+    bot = make_bot()
+
+    await on_send_to_kitchen(call, bot)
+
+    bot.send_message.assert_awaited_once()
+    assert bot.send_message.await_args.args[0] == 7001  # ушло Артуру
+    assert "хачапури" in bot.send_message.await_args.args[1]
+    call.answer.assert_awaited()
+
+
+async def test_send_to_kitchen_explicit_chat_id(fresh_db, monkeypatch):
+    uid = 421
+    await db.ensure_user(uid, "g421")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.append_food_order(uid, "хинкали")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_CHAT_ID", -100777)  # кухонная группа
+
+    call = make_callback(data=f"kit:{uid}", user_id=9999, username="org")
+    call.message.text = "order"
+    call.message.edit_text = AsyncMock()
+    bot = make_bot()
+
+    await on_send_to_kitchen(call, bot)
+
+    assert bot.send_message.await_args.args[0] == -100777
+
+
+async def test_send_to_kitchen_not_configured(fresh_db, monkeypatch):
+    uid = 422
+    await db.ensure_user(uid, "g422")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.append_food_order(uid, "лобио")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_CHAT_ID", 0)
+    monkeypatch.setattr(config, "KITCHEN_USERNAME", "")  # никого не знаем
+
+    call = make_callback(data=f"kit:{uid}", user_id=9999, username="org")
+    bot = make_bot()
+
+    await on_send_to_kitchen(call, bot)
+
+    bot.send_message.assert_not_awaited()
+    call.answer.assert_awaited()
+    assert call.answer.call_args[1].get("show_alert") is True
+
+
+async def test_send_to_kitchen_non_staff_denied(fresh_db, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_IDS", set())
+    monkeypatch.setattr(config, "ADMIN_GROUP_ID", -100999)
+
+    call = make_callback(data="kit:420", user_id=555)
+    bot = make_bot(is_staff=False)
+
+    await on_send_to_kitchen(call, bot)
+
+    bot.send_message.assert_not_awaited()
+    assert call.answer.call_args[1].get("show_alert") is True
 
 
 async def test_process_scan_already_checked_in(fresh_db, monkeypatch):
