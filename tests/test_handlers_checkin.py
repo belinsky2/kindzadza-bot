@@ -257,6 +257,74 @@ async def test_checkin_prevents_double_scan(fresh_db, monkeypatch):
     assert "отмечен" in answer_text.lower() or "уже" in answer_text.lower()
 
 
+# ==================== Накопительная отметка (докопка прихода) ====================
+
+async def test_checkin_partial_then_complete(fresh_db, monkeypatch):
+    """3 из 4 пришли сразу, потом 1 опоздавший по тому же QR → все на месте."""
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    uid = 710
+    await db.ensure_user(uid, "guest710")
+    await db.set_order(uid, 4, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "PARTIAL2_CODE")
+
+    # пришли 3
+    call1 = make_callback(data="ci:PARTIAL2_CODE:3", user_id=9999)
+    call1.message.edit_text = AsyncMock()
+    bot = make_bot()
+    await on_checkin(call1, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["arrived_count"] == 3  # частично
+
+    # опоздавший показывает тот же QR — карточка показывает остаток
+    msg = make_message(user_id=9999, username="org")
+    await process_scan(msg, bot, "PARTIAL2_CODE")
+    card = msg.answer.call_args[0][0]
+    assert "Осталось отметить" in card
+
+    # отмечаем последнего
+    call2 = make_callback(data="ci:PARTIAL2_CODE:1", user_id=9999)
+    call2.message.edit_text = AsyncMock()
+    await on_checkin(call2, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["arrived_count"] == 4  # все пришли
+    done_text = call2.message.edit_text.call_args[0][0]
+    assert "Все на месте" in done_text
+
+
+async def test_checkin_rescan_after_full_shows_extra_pay(fresh_db, monkeypatch):
+    """После полной отметки повторный скан → 'оплата на месте'."""
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    uid = 711
+    await db.ensure_user(uid, "guest711")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "FULL_CODE")
+
+    call = make_callback(data="ci:FULL_CODE:2", user_id=9999)
+    call.message.edit_text = AsyncMock()
+    bot = make_bot()
+    await on_checkin(call, bot)  # все 2 пришли
+
+    msg = make_message(user_id=9999, username="org")
+    await process_scan(msg, bot, "FULL_CODE")
+    text = msg.answer.call_args[0][0]
+    assert "уже" in text.lower()
+    assert "на месте" in text.lower()
+
+
+async def test_add_arrival_caps_at_qty(fresh_db):
+    uid = 712
+    await db.ensure_user(uid, "guest712")
+    await db.set_order(uid, 3, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    assert await db.add_arrival(uid, 2) == 2
+    # пытаемся добавить ещё 5 — потолок qty=3
+    assert await db.add_arrival(uid, 5) == 3
+    reg = await db.get_registration(uid)
+    assert reg["arrived_count"] == 3
+
+
 # ==================== Интеграция: полный цикл регистрации и check-in ====================
 
 async def test_full_cycle_register_confirm_checkin(fresh_db, monkeypatch):

@@ -213,7 +213,8 @@ def ticket_caption(reg: dict) -> str:
         f"Гостей: <b>{reg.get('qty', 1)}</b>\n\n"
         "Покажи этот QR на входе – организатор отсканирует его.\n"
         f"Код билета: <code>{code}</code>\n\n"
-        "⚠️ QR одноразовый: после отметки на входе повторно не сработает.\n"
+        "🎫 Один QR на всю компанию. Если придёте не все сразу – опоздавшие "
+        "покажут этот же QR, и их отметят.\n"
         "Не пересылай его посторонним."
     )
 
@@ -234,38 +235,53 @@ def scan_foreign() -> str:
     return "Это чужой билет. Сканировать и отмечать вход могут только организаторы."
 
 
-def checkin_card(reg: dict) -> str:
+def checkin_card(reg: dict, arrived: int, remaining: int) -> str:
+    """Карточка при сканировании: показывает, сколько уже пришло и сколько осталось."""
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
+    qty = reg.get("qty", 1)
+    already = f"✅ Уже пришло: <b>{arrived}</b>\n" if arrived else ""
     return (
         "🎫 <b>Билет</b>\n"
         f"👤 {reg.get('name', '–')} ({uname})\n"
-        f"🎟 Оплачено мест: <b>{reg.get('qty', 1)}</b>\n\n"
-        "Сколько человек пришло? Отметь 👇"
+        f"🎟 Оплачено мест: <b>{qty}</b>\n"
+        f"{already}"
+        f"Осталось отметить: <b>{remaining}</b>\n\n"
+        "Сколько человек пришло сейчас? Отметь 👇"
     )
 
 
-def checkin_already(reg: dict) -> str:
-    import datetime
-    ts = reg.get("checked_in_at")
-    when = (
-        datetime.datetime.fromtimestamp(ts, config.TZ).strftime("%H:%M")
-        if ts else "–"
-    )
-    return (
-        "⚠️ <b>Билет уже отмечен!</b>\n"
-        f"👤 {reg.get('name', '–')}\n"
-        f"Отмечен в {when}, прошло гостей: <b>{reg.get('arrived_count', '?')}</b> "
-        f"из {reg.get('qty', 1)}.\n\n"
-        "Повторный вход по этому QR – не пропускать."
-    )
-
-
-def checkin_done(reg: dict, arrived: int) -> str:
+def checkin_done_partial(reg: dict) -> str:
+    """Отметили часть компании – ждём остальных по тому же QR."""
+    arrived = int(reg.get("arrived_count") or 0)
+    qty = int(reg.get("qty") or 1)
     return (
         "✅ <b>Отмечено!</b>\n"
         f"👤 {reg.get('name', '–')}\n"
-        f"Прошло гостей: <b>{arrived}</b> из {reg.get('qty', 1)}.\n"
+        f"Прошло гостей: <b>{arrived}</b> из {qty}. Осталось: <b>{qty - arrived}</b>.\n\n"
+        "Когда подойдут остальные – отсканируй этот же QR ещё раз. 🥂"
+    )
+
+
+def checkin_done_full(reg: dict) -> str:
+    """Пришла вся компания – билет закрыт."""
+    qty = int(reg.get("qty") or 1)
+    return (
+        "✅ <b>Все на месте!</b>\n"
+        f"👤 {reg.get('name', '–')}\n"
+        f"Прошло гостей: <b>{qty}</b> из {qty}. Билет закрыт.\n"
         "Добро пожаловать! 🥂"
+    )
+
+
+def checkin_all_arrived(reg: dict) -> str:
+    """Повторный скан, когда уже отмечены все оплаченные места."""
+    qty = int(reg.get("qty") or 1)
+    return (
+        "⚠️ <b>Все оплаченные места уже отмечены</b>\n"
+        f"👤 {reg.get('name', '–')}\n"
+        f"По этому билету прошло {qty} из {qty}.\n\n"
+        "Если пришёл ещё человек – это сверх оплаченного. "
+        "Оплата на месте у организатора."
     )
 
 

@@ -108,10 +108,13 @@ def admin_confirm_kb(user_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def checkin_arrived_kb(code: str, qty: int) -> InlineKeyboardMarkup:
-    """Кнопки 'сколько пришло': 1..qty (до 10)."""
+def checkin_arrived_kb(code: str, remaining: int) -> InlineKeyboardMarkup:
+    """Кнопки 'сколько пришло сейчас': 1..remaining (до 10).
+
+    remaining – сколько ещё осталось отметить (qty минус уже пришедшие).
+    """
     kb = InlineKeyboardBuilder()
-    n = min(qty, 10)
+    n = min(remaining, 10)
     if n == 1:
         kb.button(text="✅ Пришёл (1)", callback_data=f"ci:{code}:1")
     else:

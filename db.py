@@ -204,6 +204,24 @@ async def check_in(user_id: int, arrived: int) -> None:
     await _db.commit()
 
 
+async def add_arrival(user_id: int, k: int) -> int:
+    """Добавляет k пришедших к уже отмеченным (не больше общего числа билетов).
+
+    Позволяет отмечать компанию по частям: сначала пришли одни, позже –
+    опоздавшие по тому же QR. Возвращает итоговое число пришедших.
+    """
+    reg = await get_registration(user_id)
+    qty = int((reg.get("qty") if reg else 1) or 1)
+    prev = int((reg.get("arrived_count") if reg else 0) or 0)
+    new = min(prev + k, qty)
+    await _db.execute(
+        "UPDATE registrations SET arrived_count=?, checked_in_at=?, updated_at=? WHERE user_id=?",
+        (new, _now(), _now(), user_id),
+    )
+    await _db.commit()
+    return new
+
+
 async def checkin_totals() -> tuple[int, int]:
     """(заказов отмечено, гостей пришло)."""
     cur = await _db.execute(

@@ -46,13 +46,17 @@ async def process_scan(message: Message, bot: Bot, code: str) -> None:
             await message.answer(texts.scan_foreign())
         return
 
-    if reg.get("checked_in_at"):
-        await message.answer(texts.checkin_already(reg))
+    qty = int(reg.get("qty") or 1)
+    arrived = int(reg.get("arrived_count") or 0)
+    if arrived >= qty:
+        # все оплаченные места уже отмечены
+        await message.answer(texts.checkin_all_arrived(reg))
         return
 
+    remaining = qty - arrived
     await message.answer(
-        texts.checkin_card(reg),
-        reply_markup=kb.checkin_arrived_kb(code, int(reg.get("qty", 1))),
+        texts.checkin_card(reg, arrived, remaining),
+        reply_markup=kb.checkin_arrived_kb(code, remaining),
     )
 
 
@@ -68,19 +72,21 @@ async def on_checkin(call: CallbackQuery, bot: Bot) -> None:
         await call.answer("Билет не найден", show_alert=True)
         return
 
-    if reg.get("checked_in_at"):
-        await call.answer("Уже отмечен", show_alert=True)
+    qty = int(reg.get("qty") or 1)
+    arrived = int(reg.get("arrived_count") or 0)
+    if arrived >= qty:
+        await call.answer("Все уже отмечены", show_alert=True)
         try:
-            await call.message.edit_text(texts.checkin_already(reg), reply_markup=None)
+            await call.message.edit_text(texts.checkin_all_arrived(reg), reply_markup=None)
         except Exception:
             pass
         return
 
-    arrived = int(k)
-    await db.check_in(reg["user_id"], arrived)
+    new = await db.add_arrival(reg["user_id"], int(k))
     reg = await db.get_by_ticket_code(code)
     await call.answer("Отмечено ✅")
+    text = texts.checkin_done_full(reg) if new >= qty else texts.checkin_done_partial(reg)
     try:
-        await call.message.edit_text(texts.checkin_done(reg, arrived), reply_markup=None)
+        await call.message.edit_text(text, reply_markup=None)
     except Exception:
-        await call.message.answer(texts.checkin_done(reg, arrived))
+        await call.message.answer(text)
