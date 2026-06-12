@@ -35,8 +35,7 @@ def returning_kb(status: str) -> InlineKeyboardMarkup:
         kb.button(text="📸 Прислать скрин заново", callback_data="register")
     elif status == db.STATUS_DOOR:
         kb.button(text="💳 Оплатить онлайн", callback_data="register")
-    else:
-        kb.button(text="🎟 Купить ещё билеты", callback_data="register")
+    # STATUS_CONFIRMED_ONLINE: не предлагаем повторную регистрацию — только контакт
     contact = _contact_button()
     if contact:
         kb.row(contact)
