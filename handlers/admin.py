@@ -262,6 +262,10 @@ async def on_broadcast_segment(call: CallbackQuery, bot: Bot) -> None:
     await call.answer("Рассылаю…")
     if seg == "all":
         uids = await db.list_all_user_ids()
+    elif seg == "paid":
+        uids = await segments.user_ids_paid()
+    elif seg == "unpaid":
+        uids = await segments.user_ids_not_paid()
     else:
         uids = await segments.user_ids_for_segment(seg)
 
@@ -275,6 +279,7 @@ async def on_broadcast_segment(call: CallbackQuery, bot: Bot) -> None:
 
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
     await call.message.edit_reply_markup(reply_markup=None)
+    seg_label = {"paid": "купили онлайн", "unpaid": "не купили", "all": "все"}.get(seg, seg)
     await call.message.answer(
-        f"Рассылка завершена ({seg}): отправлено {sent}, ошибок {failed}."
+        f"Рассылка завершена ({seg_label}): отправлено {sent}, ошибок {failed}."
     )

@@ -362,3 +362,58 @@ async def test_broadcast_segment_all(fresh_db):
         await on_broadcast_segment(call, bot)
 
     assert uid_admin not in _pending_broadcast
+
+
+async def test_broadcast_segment_paid_targets_confirmed(fresh_db):
+    import segments
+    await db.ensure_user(5101, "u5101")
+    await db.set_order(5101, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.ensure_user(5102, "u5102")  # просто зашёл — не должен попасть
+
+    uid_admin = 5199
+    _pending_broadcast[uid_admin] = {"type": "text", "text": "Спасибо за оплату!"}
+
+    call = make_callback(data="bc:paid", user_id=uid_admin)
+    call.message.edit_reply_markup = AsyncMock()
+    call.message.answer = AsyncMock()
+    bot = make_bot()
+
+    captured = {}
+
+    async def fake_broadcast(b, uids, send_one):
+        captured["uids"] = list(uids)
+        return (len(uids), 0)
+
+    with patch("broadcast.broadcast", new=fake_broadcast):
+        await on_broadcast_segment(call, bot)
+
+    assert captured["uids"] == [5101]
+    assert uid_admin not in _pending_broadcast
+
+
+async def test_broadcast_segment_unpaid_targets_everyone_else(fresh_db):
+    await db.ensure_user(5201, "u5201")  # просто зашёл (new)
+    await db.ensure_user(5202, "u5202")
+    await db.set_order(5202, 1, "vnd", "x", db.STATUS_AWAITING_PAYMENT)
+    await db.ensure_user(5203, "u5203")
+    await db.set_order(5203, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)  # оплатил — не попадёт
+
+    uid_admin = 5299
+    _pending_broadcast[uid_admin] = {"type": "text", "text": "Ещё не поздно купить!"}
+
+    call = make_callback(data="bc:unpaid", user_id=uid_admin)
+    call.message.edit_reply_markup = AsyncMock()
+    call.message.answer = AsyncMock()
+    bot = make_bot()
+
+    captured = {}
+
+    async def fake_broadcast(b, uids, send_one):
+        captured["uids"] = list(uids)
+        return (len(uids), 0)
+
+    with patch("broadcast.broadcast", new=fake_broadcast):
+        await on_broadcast_segment(call, bot)
+
+    assert set(captured["uids"]) == {5201, 5202}
+    assert uid_admin not in _pending_broadcast

@@ -131,3 +131,46 @@ async def test_user_ids_for_segment_paid(fresh_db):
 async def test_user_ids_for_segment_empty(fresh_db):
     ids = await segments.user_ids_for_segment(segments.SEG_PAID)
     assert ids == []
+
+
+# ==================== user_ids_paid / user_ids_not_paid ====================
+
+async def test_user_ids_paid_only_confirmed(fresh_db):
+    await db.ensure_user(650, "u650")
+    await db.set_order(650, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.ensure_user(651, "u651")  # просто зашёл (new)
+    await db.ensure_user(652, "u652")
+    await db.set_order(652, 1, "vnd", "x", db.STATUS_AWAITING_PAYMENT)
+
+    ids = await segments.user_ids_paid()
+    assert set(ids) == {650}
+
+
+async def test_user_ids_not_paid_includes_new_and_others(fresh_db):
+    await db.ensure_user(660, "u660")  # просто зашёл (new)
+    await db.ensure_user(661, "u661")
+    await db.set_order(661, 1, "vnd", "x", db.STATUS_AWAITING_PAYMENT)
+    await db.ensure_user(662, "u662")
+    await db.set_order(662, 1, "vnd", "x", db.STATUS_REJECTED)
+    await db.ensure_user(663, "u663")
+    await db.set_order(663, 1, "door", "x", db.STATUS_DOOR)
+    # оплативший онлайн — НЕ должен попасть
+    await db.ensure_user(664, "u664")
+    await db.set_order(664, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    ids = await segments.user_ids_not_paid()
+    assert set(ids) == {660, 661, 662, 663}
+
+
+async def test_paid_and_not_paid_are_disjoint_and_cover_all(fresh_db):
+    await db.ensure_user(670, "u670")
+    await db.set_order(670, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.ensure_user(671, "u671")  # new
+    await db.ensure_user(672, "u672")
+    await db.set_order(672, 1, "vnd", "x", db.STATUS_AWAITING_CONFIRMATION)
+
+    paid = set(await segments.user_ids_paid())
+    not_paid = set(await segments.user_ids_not_paid())
+    all_ids = set(await db.list_all_user_ids())
+    assert paid.isdisjoint(not_paid)
+    assert paid | not_paid == all_ids

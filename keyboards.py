@@ -123,10 +123,9 @@ def checkin_arrived_kb(code: str, qty: int) -> InlineKeyboardMarkup:
 
 def broadcast_segment_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="A · Не оплатили", callback_data="bc:A")
-    kb.button(text="B · На месте", callback_data="bc:B")
-    kb.button(text="C · Оплатили", callback_data="bc:C")
+    kb.button(text="✅ Купили онлайн", callback_data="bc:paid")
+    kb.button(text="❌ Не купили", callback_data="bc:unpaid")
     kb.button(text="Все", callback_data="bc:all")
     kb.button(text="Отмена", callback_data="bc:cancel")
-    kb.adjust(2, 2, 1)
+    kb.adjust(2, 2)
     return kb.as_markup()
