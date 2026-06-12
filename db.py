@@ -157,6 +157,15 @@ async def set_raffle_numbers(user_id: int, numbers: list[int]) -> None:
     await _db.commit()
 
 
+async def set_qty(user_id: int, qty: int) -> None:
+    """Обновляет только количество билетов (например, при докупке)."""
+    await _db.execute(
+        "UPDATE registrations SET qty=?, updated_at=? WHERE user_id=?",
+        (qty, _now(), user_id),
+    )
+    await _db.commit()
+
+
 async def append_food_order(user_id: int, text: str) -> str:
     """Дозаписывает сообщение к заказу (с новой строки). Возвращает полный заказ."""
     reg = await get_registration(user_id)

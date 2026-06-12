@@ -97,6 +97,49 @@ async def test_confirm_assigns_sequential_raffle_numbers(fresh_db):
     assert nums0.isdisjoint(nums1)
 
 
+async def test_confirm_repeat_purchase_accumulates(fresh_db):
+    """Докупка: гость уже подтверждён, покупает ещё — номера копятся, qty растёт."""
+    uid = 1500
+    await db.ensure_user(uid, "repeatguest")
+    await db.set_name(uid, "Гость")
+    await db.set_order(uid, 2, "vnd", "400 000 ₫", db.STATUS_AWAITING_CONFIRMATION)
+
+    # первое подтверждение → 2 номера
+    call1 = make_callback(data=f"adm:confirm:{uid}", user_id=9999, username="adm")
+    call1.message.caption = "Card"
+    call1.message.edit_caption = AsyncMock()
+    bot1 = make_bot()
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.BOT_USERNAME", "bot"):
+        await on_admin_decision(call1, bot1)
+
+    reg = await db.get_registration(uid)
+    first_numbers = reg["raffle_numbers"].split(",")
+    assert len(first_numbers) == 2
+
+    # гость докупает 1 билет: воронка перезаписала qty и статус, номера сохранились
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_AWAITING_CONFIRMATION)
+
+    call2 = make_callback(data=f"adm:confirm:{uid}", user_id=9999, username="adm")
+    call2.message.caption = "Card"
+    call2.message.edit_caption = AsyncMock()
+    bot2 = make_bot()
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.BOT_USERNAME", "bot"):
+        await on_admin_decision(call2, bot2)
+
+    reg = await db.get_registration(uid)
+    nums = reg["raffle_numbers"].split(",")
+    assert len(nums) == 3                  # 2 старых + 1 докупленный
+    assert nums[:2] == first_numbers       # прежние номера на месте
+    assert reg["qty"] == 3                  # итоговое число билетов
+
+    # одно сообщение об обновлении заказа, без повторных меню/просьбы о заказе
+    bot2.send_message.assert_awaited_once()
+    sent = bot2.send_message.await_args_list[0].args[1]
+    assert "обновлён" in sent.lower()
+
+
 async def test_confirm_no_qr_without_bot_username(fresh_db):
     uid = 1002
     await db.ensure_user(uid, "user1002")

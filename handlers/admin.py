@@ -48,32 +48,43 @@ async def on_admin_decision(call: CallbackQuery, bot: Bot) -> None:
         if reg["status"] == db.STATUS_CONFIRMED_ONLINE:
             await call.answer("Уже подтверждено")
             return
-        qty = int(reg.get("qty", 1))
-        numbers = await db.assign_raffle_numbers(qty)
-        await db.set_raffle_numbers(user_id, numbers)
-        # уникальный код билета (генерим один раз)
+        # Уже выданные номера розыгрыша (если гость докупает) — их сохраняем.
+        # Их количество = число ранее подтверждённых билетов.
+        existing = [n for n in (reg.get("raffle_numbers") or "").split(",") if n.strip()]
+        is_repeat = bool(existing)
+        new_qty = int(reg.get("qty", 1))
+        # новые номера — по одному на каждый докупленный билет
+        new_numbers = await db.assign_raffle_numbers(new_qty)
+        all_numbers = [int(n) for n in existing] + new_numbers
+        await db.set_raffle_numbers(user_id, all_numbers)
+        # общее число билетов = старые + докупленные (= число всех номеров)
+        await db.set_qty(user_id, len(all_numbers))
+        # уникальный код билета (генерим один раз; тот же QR пускает всю компанию)
         if not reg.get("ticket_code"):
             await db.set_ticket_code(user_id, tickets.new_code())
         await db.update_status(user_id, db.STATUS_CONFIRMED_ONLINE)
         reg = await db.get_registration(user_id)
         await sheets.sync_registration(reg)
         try:
-            await bot.send_message(user_id, texts.confirmed(reg), disable_web_page_preview=True)
-            # QR-билет отдельным сообщением
+            text = texts.order_updated(reg) if is_repeat else texts.confirmed(reg)
+            await bot.send_message(user_id, text, disable_web_page_preview=True)
+            # QR-билет отдельным сообщением (обновлённый — на всё количество)
             if config.BOT_USERNAME and reg.get("ticket_code"):
                 qr = tickets.make_qr_png(tickets.ticket_link(reg["ticket_code"]))
                 await bot.send_photo(user_id, qr, caption=texts.ticket_caption(reg))
-            if os.path.exists(config.MENU_IMAGE):
-                await bot.send_photo(
-                    user_id,
-                    FSInputFile(config.MENU_IMAGE),
-                    caption=texts.menu_promo(),
-                )
-            await bot.send_message(user_id, texts.ASK_FOOD_ORDER)
+            # меню и просьбу о заказе шлём только при первом подтверждении
+            if not is_repeat:
+                if os.path.exists(config.MENU_IMAGE):
+                    await bot.send_photo(
+                        user_id,
+                        FSInputFile(config.MENU_IMAGE),
+                        caption=texts.menu_promo(),
+                    )
+                await bot.send_message(user_id, texts.ASK_FOOD_ORDER)
         except Exception:
             log.exception("Не удалось уведомить пользователя %s о подтверждении", user_id)
-        await _mark_card(call, f"✅ Подтвердил {actor} · номера: "
-                               f"{reg.get('raffle_numbers')}")
+        note = "✅ Подтвердил (докупка)" if is_repeat else "✅ Подтвердил"
+        await _mark_card(call, f"{note} {actor} · номера: {reg.get('raffle_numbers')}")
         await call.answer("Подтверждено ✅")
 
     elif action == "reject":

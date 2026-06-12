@@ -157,6 +157,21 @@ async def test_set_raffle_numbers_single(fresh_db):
     assert reg["raffle_numbers"] == "7"
 
 
+# ==================== set_qty ====================
+
+async def test_set_qty_updates_only_qty(fresh_db):
+    await db.ensure_user(62, "lee")
+    await db.set_order(62, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_raffle_numbers(62, [5])
+
+    await db.set_qty(62, 3)
+
+    reg = await db.get_registration(62)
+    assert reg["qty"] == 3
+    assert reg["raffle_numbers"] == "5"                 # не затёрлось
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE  # не затёрлось
+
+
 # ==================== ticket_code ====================
 
 async def test_set_and_get_ticket_code(fresh_db):
