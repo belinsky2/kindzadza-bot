@@ -186,10 +186,37 @@ def status_view(reg: dict | None) -> str:
         )
     if status == "rejected":
         return "❌ Прошлый скрин не подтвердили. Пришли скрин заново через /start."
+    if status == "refunded":
+        return "↩️ По этому билету оформлен возврат. Хочешь прийти снова – нажми /start."
     return "Нажми /start, чтобы зарегистрироваться."
 
 
 # ===================== КАРТОЧКА ДЛЯ ОРГОВ =====================
+
+def refund_usage() -> str:
+    return (
+        "↩️ <b>Возврат билета</b>. Укажи гостя:\n"
+        "• <code>/refund 1888561400</code> (user_id)\n"
+        "• <code>/refund @username</code>\n\n"
+        "Билет аннулируется: место освобождается, QR и номера розыгрыша гасятся. "
+        "Строка гостя остаётся со статусом «возврат»."
+    )
+
+
+def refund_not_found(arg: str) -> str:
+    return f"Гость <code>{arg}</code> не найден. Проверь user_id или @username."
+
+
+def refund_done(reg: dict) -> str:
+    uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
+    return (
+        "↩️ <b>Возврат оформлен</b>\n"
+        f"👤 {reg.get('name', '–')} ({uname})\n"
+        f"🆔 <code>{reg['user_id']}</code>\n\n"
+        "Место освобождено, QR и номера розыгрыша аннулированы. "
+        "Гость помечен как «возврат»."
+    )
+
 
 def admin_card(reg: dict) -> str:
     m = config.PAYMENT_METHODS.get(reg["payment_method"], {})
@@ -323,6 +350,7 @@ _GUEST_ICONS = {
     "confirmed_online": "✅",
     "door": "📍",
     "rejected": "❌",
+    "refunded": "↩️",
 }
 
 _STATUS_SHORT = {
@@ -331,6 +359,7 @@ _STATUS_SHORT = {
     "confirmed_online": "оплатил",
     "door": "на месте",
     "rejected": "отклонён",
+    "refunded": "возврат",
 }
 
 

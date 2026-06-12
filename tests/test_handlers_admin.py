@@ -11,6 +11,7 @@ from handlers.admin import (
     cmd_stats,
     cmd_addpost,
     cmd_broadcast,
+    cmd_refund,
     on_broadcast_segment,
     _pending_broadcast,
 )
@@ -209,6 +210,65 @@ async def test_reject_notifies_user(fresh_db):
     send_args = bot.send_message.call_args[0]
     assert send_args[0] == uid
     assert "подтвердить" in send_args[1].lower() or "скрин" in send_args[1].lower()
+
+
+# ==================== cmd_refund ====================
+
+async def test_refund_by_user_id_voids_ticket(fresh_db):
+    uid = 6001
+    await db.ensure_user(uid, "refundguest")
+    await db.set_name(uid, "Возвратный")
+    await db.set_order(uid, 2, "vnd", "400 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_raffle_numbers(uid, [5, 6])
+    await db.set_ticket_code(uid, "ABC123")
+    await db.add_arrival(uid, 1)
+
+    msg = make_message(user_id=9999, text=f"/refund {uid}")
+    with patch("sheets.sync_all", new=AsyncMock(return_value=1)):
+        await cmd_refund(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_REFUNDED
+    assert reg["qty"] == 0
+    assert reg["raffle_numbers"] is None
+    assert reg["ticket_code"] is None
+    assert reg["arrived_count"] is None
+    assert reg["checked_in_at"] is None
+    # место освобождено
+    assert await db.seats_taken() == 0
+    # QR больше не резолвится
+    assert await db.get_by_ticket_code("ABC123") is None
+    msg.answer.assert_awaited_once()
+
+
+async def test_refund_by_username(fresh_db):
+    uid = 6002
+    await db.ensure_user(uid, "IgorM7317")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    # регистронезависимо и с @
+    msg = make_message(user_id=9999, text="/refund @igorm7317")
+    with patch("sheets.sync_all", new=AsyncMock(return_value=1)):
+        await cmd_refund(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_REFUNDED
+
+
+async def test_refund_no_arg_shows_usage(fresh_db):
+    msg = make_message(user_id=9999, text="/refund")
+    await cmd_refund(msg)
+    msg.answer.assert_awaited_once()
+    text = msg.answer.call_args[0][0]
+    assert "refund" in text.lower()
+
+
+async def test_refund_not_found(fresh_db):
+    msg = make_message(user_id=9999, text="/refund 424242")
+    with patch("sheets.sync_all", new=AsyncMock(return_value=1)):
+        await cmd_refund(msg)
+    text = msg.answer.call_args[0][0]
+    assert "не найден" in text.lower()
 
 
 # ==================== cmd_stats ====================

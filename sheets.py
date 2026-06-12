@@ -39,6 +39,7 @@ STATUS_LABELS = {
     "confirmed_online": "оплатил онлайн",
     "door": "оплата на месте",
     "rejected": "отклонён",
+    "refunded": "возврат",
 }
 
 

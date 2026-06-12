@@ -17,6 +17,7 @@ STATUS_AWAITING_CONFIRMATION = "awaiting_confirmation"  # прислал скр�
 STATUS_CONFIRMED_ONLINE = "confirmed_online"        # орг подтвердил онлайн-оплату
 STATUS_DOOR = "door"                    # выбрал оплату на месте
 STATUS_REJECTED = "rejected"            # орг отклонил скрин
+STATUS_REFUNDED = "refunded"            # оформлен возврат — билет аннулирован
 
 # Статусы, занимающие место (бронь + подтверждённые)
 SEAT_STATUSES = (STATUS_CONFIRMED_ONLINE, STATUS_AWAITING_CONFIRMATION)
@@ -194,6 +195,30 @@ async def get_by_ticket_code(code: str) -> Optional[dict]:
     cur = await _db.execute("SELECT * FROM registrations WHERE ticket_code=?", (code,))
     row = await cur.fetchone()
     return dict(row) if row else None
+
+
+async def get_by_username(username: str) -> Optional[dict]:
+    """Поиск записи по нику (без @, регистронезависимо)."""
+    cur = await _db.execute(
+        "SELECT * FROM registrations WHERE username=? COLLATE NOCASE", (username,)
+    )
+    row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def refund(user_id: int) -> None:
+    """Возврат билета: освобождает место, гасит QR, номера и отметки прихода.
+
+    Строку гостя оставляем (статус «возврат») — для истории и Google-таблицы.
+    Номера розыгрыша, код билета и счётчики обнуляются, qty → 0.
+    """
+    await _db.execute(
+        "UPDATE registrations SET status=?, qty=0, raffle_numbers=NULL, "
+        "ticket_code=NULL, arrived_count=NULL, checked_in_at=NULL, updated_at=? "
+        "WHERE user_id=?",
+        (STATUS_REFUNDED, _now(), user_id),
+    )
+    await _db.commit()
 
 
 async def check_in(user_id: int, arrived: int) -> None:

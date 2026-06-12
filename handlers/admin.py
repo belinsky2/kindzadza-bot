@@ -112,6 +112,36 @@ async def _mark_card(call: CallbackQuery, note: str) -> None:
         log.debug("Не удалось обновить карточку (необязательно).")
 
 
+# ---------- /refund ----------
+
+@router.message(Command("refund"))
+async def cmd_refund(message: Message) -> None:
+    """Возврат билета: /refund <user_id> или /refund @username."""
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer(texts.refund_usage())
+        return
+
+    arg = args[1].strip()
+    if arg.startswith("@"):
+        reg = await db.get_by_username(arg[1:])
+    elif arg.lstrip("-").isdigit():
+        reg = await db.get_registration(int(arg))
+    else:
+        reg = None
+
+    if not reg:
+        await message.answer(texts.refund_not_found(arg))
+        return
+
+    await db.refund(reg["user_id"])
+    reg = await db.get_registration(reg["user_id"])
+    # Полная пересборка таблицы — гость уходит с листа «Оплатившие».
+    regs = await db.get_all_registrations(include_new=True)
+    await sheets.sync_all(regs)
+    await message.answer(texts.refund_done(reg))
+
+
 # ---------- /guests ----------
 
 @router.message(Command("guests"))
@@ -166,6 +196,7 @@ async def cmd_stats(message: Message) -> None:
         db.STATUS_CONFIRMED_ONLINE: "оплатили онлайн",
         db.STATUS_DOOR: "оплата на месте",
         db.STATUS_REJECTED: "отклонены",
+        db.STATUS_REFUNDED: "возвраты",
     }
     for status, label in labels.items():
         d = by_status.get(status, {"count": 0, "qty": 0})
