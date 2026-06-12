@@ -24,12 +24,12 @@ _ws_paid = None     # лист «Оплатившие»
 
 HEADER_ALL = [
     "user_id", "Имя", "Ник", "Кол-во", "Способ",
-    "Сумма", "Статус", "Номера розыгрыша", "Создано", "Обновлено",
+    "Сумма", "Статус", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
 ]
 
 HEADER_PAID = [
     "user_id", "Имя", "Ник", "Кол-во билетов", "Способ",
-    "Сумма", "Номера розыгрыша", "Заказ еды", "Создано",
+    "Сумма", "Номера розыгрыша", "Заказ еды", "Пришло", "Создано",
 ]
 
 STATUS_LABELS = {
@@ -89,6 +89,15 @@ def _fmt_ts(ts) -> str:
         return ""
 
 
+def _arrived_str(reg: dict) -> str:
+    """'2/3' если были отметки, иначе ''."""
+    arrived = reg.get("arrived_count")
+    if arrived is None:
+        return ""
+    qty = reg.get("qty") or 0
+    return f"{int(arrived)}/{int(qty)}"
+
+
 def _row_all(reg: dict) -> list:
     method = config.PAYMENT_METHODS.get(reg.get("payment_method") or "", {}).get("label", "")
     return [
@@ -100,6 +109,7 @@ def _row_all(reg: dict) -> list:
         reg.get("amount") or "",
         STATUS_LABELS.get(reg.get("status"), reg.get("status") or ""),
         reg.get("raffle_numbers") or "",
+        _arrived_str(reg),
         _fmt_ts(reg.get("created_at")),
         _fmt_ts(reg.get("updated_at")),
     ]
@@ -116,6 +126,7 @@ def _row_paid(reg: dict) -> list:
         reg.get("amount") or "",
         reg.get("raffle_numbers") or "",
         reg.get("food_order") or "",
+        _arrived_str(reg),
         _fmt_ts(reg.get("created_at")),
     ]
 

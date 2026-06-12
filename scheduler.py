@@ -13,6 +13,7 @@ import broadcast
 import config
 import db
 import segments
+import sheets
 import texts
 
 log = logging.getLogger(__name__)
@@ -79,8 +80,21 @@ def _parse_dt(value: str) -> datetime | None:
         return None
 
 
+async def _periodic_sync() -> None:
+    """Полная перезапись Google-таблицы раз в 30 минут (страховочная синхронизация)."""
+    regs = await db.get_all_registrations(include_new=True)
+    result = await sheets.sync_all(regs)
+    if result >= 0:
+        log.debug("Авто-синхронизация Google Sheets: %s строк.", result)
+    else:
+        log.warning("Авто-синхронизация Google Sheets не удалась (Sheets отключены или ошибка).")
+
+
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     sched = AsyncIOScheduler(timezone=config.TZ)
+
+    # периодическая синхронизация с Google Sheets
+    sched.add_job(_periodic_sync, "interval", minutes=30, id="sheets_sync")
 
     # ежедневный пост
     try:

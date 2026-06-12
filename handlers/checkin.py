@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import Bot, F, Router
@@ -13,6 +14,7 @@ from aiogram.types import CallbackQuery, Message
 import config
 import db
 import keyboards as kb
+import sheets
 import texts
 
 log = logging.getLogger(__name__)
@@ -84,6 +86,7 @@ async def on_checkin(call: CallbackQuery, bot: Bot) -> None:
 
     new = await db.add_arrival(reg["user_id"], int(k))
     reg = await db.get_by_ticket_code(code)
+    asyncio.create_task(sheets.sync_registration(reg))
     await call.answer("Отмечено ✅")
     text = texts.checkin_done_full(reg) if new >= qty else texts.checkin_done_partial(reg)
     try:
