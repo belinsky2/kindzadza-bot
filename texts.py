@@ -267,13 +267,25 @@ def checkin_card(reg: dict, arrived: int, remaining: int) -> str:
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
     qty = reg.get("qty", 1)
     already = f"✅ Уже пришло: <b>{arrived}</b>\n" if arrived else ""
+    # Заказ еды показываем-напоминаем только на первом сканировании (arrived == 0)
+    food = (reg.get("food_order") or "").strip()
+    food_block = ""
+    if arrived == 0 and food:
+        kitchen = f"@{config.KITCHEN_USERNAME}" if config.KITCHEN_USERNAME else "на кухню"
+        food_block = (
+            "\n🍽 <b>У гостя есть предзаказ еды</b> – он отдельным сообщением ниже.\n"
+            "Уточни у гостей, всё ли верно:\n"
+            f"• всё верно → перешли заказ {kitchen} (кухня начнёт готовить);\n"
+            "• заказ другой → позови официанта для уточнения.\n"
+        )
     return (
         "🎫 <b>Билет</b>\n"
         f"👤 {reg.get('name', '–')} ({uname})\n"
         f"🎟 Оплачено мест: <b>{qty}</b>\n"
         f"{already}"
-        f"Осталось отметить: <b>{remaining}</b>\n\n"
-        "Сколько человек пришло сейчас? Отметь 👇"
+        f"Осталось отметить: <b>{remaining}</b>\n"
+        f"{food_block}"
+        "\nСколько человек пришло сейчас? Отметь 👇"
     )
 
 

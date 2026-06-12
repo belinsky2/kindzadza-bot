@@ -125,6 +125,68 @@ async def test_process_scan_staff_sees_checkin_card(fresh_db, monkeypatch):
     assert "reply_markup" in call_kwargs
 
 
+async def test_process_scan_shows_food_order_for_kitchen(fresh_db, monkeypatch):
+    uid = 410
+    await db.ensure_user(uid, "foodguest")
+    await db.set_name(uid, "Гость")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "FOOD_CODE")
+    await db.append_food_order(uid, "2 хачапури, люля")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_USERNAME", "reap_of_dea")
+
+    msg = make_message(user_id=9999, username="organizer")
+    bot = make_bot()
+
+    await process_scan(msg, bot, "FOOD_CODE")
+
+    # два сообщения: карточка check-in + пересылаемый заказ на кухню
+    assert msg.answer.await_count == 2
+    card_text = msg.answer.await_args_list[0].args[0]
+    assert "reap_of_dea" in card_text  # инструкция переслать заказ на кухню
+    order_text = msg.answer.await_args_list[1].args[0]
+    assert "хачапури" in order_text
+
+
+async def test_process_scan_no_food_order_no_extra_message(fresh_db, monkeypatch):
+    uid = 411
+    await db.ensure_user(uid, "nofood")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "NOFOOD_CODE")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+
+    msg = make_message(user_id=9999, username="org")
+    bot = make_bot()
+
+    await process_scan(msg, bot, "NOFOOD_CODE")
+
+    msg.answer.assert_awaited_once()
+
+
+async def test_process_scan_rescan_no_food_reminder(fresh_db, monkeypatch):
+    """На повторном скане (опоздавшие) заказ еды повторно не показываем."""
+    uid = 412
+    await db.ensure_user(uid, "latefood")
+    await db.set_order(uid, 3, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "LATE_CODE")
+    await db.append_food_order(uid, "хинкали")
+    await db.add_arrival(uid, 1)  # один уже пришёл → arrived=1
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+
+    msg = make_message(user_id=9999, username="org")
+    bot = make_bot()
+
+    await process_scan(msg, bot, "LATE_CODE")
+
+    # только карточка, без второго сообщения и без напоминания про кухню
+    msg.answer.assert_awaited_once()
+    card_text = msg.answer.await_args_list[0].args[0]
+    assert "reap_of_dea" not in card_text
+
+
 async def test_process_scan_already_checked_in(fresh_db, monkeypatch):
     uid = 500
     await db.ensure_user(uid, "guest500")

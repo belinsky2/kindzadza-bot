@@ -31,6 +31,8 @@ BOT_TOKEN: str = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_GROUP_ID: int = _int("ADMIN_GROUP_ID", 0)
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "").strip().lstrip("@")
 ORGANIZER_USERNAME: str = os.getenv("ORGANIZER_USERNAME", "").strip().lstrip("@")
+# Ник того, кому билетер пересылает заказ еды на кухню (без @).
+KITCHEN_USERNAME: str = os.getenv("KITCHEN_USERNAME", "reap_of_dea").strip().lstrip("@")
 # Доп. список user_id оргов для check-in (через запятую). Необязательно —
 # по умолчанию права определяются членством в ADMIN_GROUP_ID.
 ADMIN_IDS: set[int] = {

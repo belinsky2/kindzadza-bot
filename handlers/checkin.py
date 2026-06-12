@@ -60,6 +60,10 @@ async def process_scan(message: Message, bot: Bot, code: str) -> None:
         texts.checkin_card(reg, arrived, remaining),
         reply_markup=kb.checkin_arrived_kb(code, remaining),
     )
+    # На первом сканировании отдаём заказ еды отдельным сообщением —
+    # его билетер пересылает на кухню, если гости подтвердили заказ.
+    if arrived == 0 and (reg.get("food_order") or "").strip():
+        await message.answer(texts.kitchen_order_card(reg))
 
 
 @router.callback_query(F.data.startswith("ci:"))
