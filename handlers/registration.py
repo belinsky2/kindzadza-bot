@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, FSInputFile, Message
 import config
 import db
 import keyboards as kb
+import scheduler as sched_mod
 import segments
 import sheets
 import texts
@@ -275,21 +276,52 @@ async def on_screenshot_stateless(message: Message, state: FSMContext, bot: Bot)
         await _accept_screenshot(message, state, bot)
 
 
-# ---------- Свободные сообщения вне воронки: заказ еды ----------
+# ---------- Свободные сообщения вне воронки ----------
 
 # Статусы, при которых текстовое сообщение трактуется как заказ еды
 ORDER_STATUSES = (db.STATUS_CONFIRMED_ONLINE, db.STATUS_DOOR)
 
 
+async def _try_forward_feedback(message: Message, bot: Bot) -> bool:
+    """Если сбор обратной связи активен — пересылает сообщение в админ-группу.
+
+    Работает только для подтверждённых онлайн-гостей.
+    Возвращает True, если сообщение было обработано как отзыв.
+    """
+    if not config.ADMIN_GROUP_ID:
+        return False
+    if await db.get_meta(sched_mod.FEEDBACK_META_KEY) != "1":
+        return False
+    reg = await db.get_registration(message.from_user.id)
+    if not reg or reg.get("status") != db.STATUS_CONFIRMED_ONLINE:
+        return False
+    try:
+        await bot.send_message(config.ADMIN_GROUP_ID, texts.feedback_header(reg))
+        await bot.forward_message(config.ADMIN_GROUP_ID, message.chat.id, message.message_id)
+    except Exception:
+        log.exception("Не удалось переслать отзыв в админ-группу")
+    await message.answer(texts.FEEDBACK_ACK)
+    return True
+
+
+@router.message(StateFilter(None), F.chat.type == "private", F.voice | F.video_note)
+async def on_feedback_media(message: Message, bot: Bot) -> None:
+    """Голосовые и кружочки от гостей — только как отзывы."""
+    await _try_forward_feedback(message, bot)
+
+
 @router.message(StateFilter(None), F.chat.type == "private", F.text)
 async def on_free_text(message: Message, bot: Bot) -> None:
-    """Любое сообщение от гостя вне воронки. Для оплативших – это заказ еды."""
+    """Любое сообщение от гостя вне воронки. Для оплативших – это заказ еды или отзыв."""
     text = message.text.strip()
     if text.startswith("/"):
         return  # неизвестная команда — игнорируем
     reg = await db.get_registration(message.from_user.id)
     if not reg or reg.get("status") not in ORDER_STATUSES:
         await message.answer(texts.FREE_TEXT_HINT)
+        return
+    # Если идёт сбор обратной связи — текст трактуем как отзыв, не как заказ еды
+    if await _try_forward_feedback(message, bot):
         return
     order = await db.append_food_order(message.from_user.id, text)
     reg = await db.get_registration(message.from_user.id)

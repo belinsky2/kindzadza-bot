@@ -16,6 +16,9 @@ import segments
 import sheets
 import texts
 
+# Ключ meta-записи для пересылки отзывов в админ-группу
+FEEDBACK_META_KEY = "feedback_active"
+
 log = logging.getLogger(__name__)
 
 
@@ -88,6 +91,18 @@ async def _periodic_sync() -> None:
         log.debug("Авто-синхронизация Google Sheets: %s строк.", result)
     else:
         log.warning("Авто-синхронизация Google Sheets не удалась (Sheets отключены или ошибка).")
+
+
+async def send_feedback_request(bot: Bot) -> None:
+    """Рассылает запрос обратной связи всем оплатившим онлайн и включает пересылку ответов."""
+    await db.set_meta(FEEDBACK_META_KEY, "1")
+    uids = await db.list_user_ids_by_statuses((db.STATUS_CONFIRMED_ONLINE,))
+
+    async def send_one(b: Bot, uid: int) -> None:
+        await b.send_message(uid, texts.FEEDBACK_REQUEST)
+
+    sent, failed = await broadcast.broadcast(bot, uids, send_one)
+    log.info("Запрос обратной связи разослан: отправлено=%s, ошибок=%s", sent, failed)
 
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:

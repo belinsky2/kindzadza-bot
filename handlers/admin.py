@@ -20,6 +20,7 @@ import segments
 import sheets
 import texts
 import tickets
+from scheduler import FEEDBACK_META_KEY
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -111,6 +112,26 @@ async def _mark_card(call: CallbackQuery, note: str) -> None:
             await call.message.edit_text(new, reply_markup=None)
     except Exception:
         log.debug("Не удалось обновить карточку (необязательно).")
+
+
+# ---------- /feedback ----------
+
+@router.message(Command("feedback"))
+async def cmd_feedback(message: Message, bot: Bot) -> None:
+    """Немедленно разослать запрос обратной связи и включить пересылку ответов."""
+    await scheduler.send_feedback_request(bot)
+    await message.answer(
+        "✅ Запрос обратной связи разослан всем оплатившим.\n"
+        "Ответы гостей (текст, голосовые, кружочки) будут пересылаться сюда.\n\n"
+        "Остановить: <code>/feedback_off</code>"
+    )
+
+
+@router.message(Command("feedback_off"))
+async def cmd_feedback_off(message: Message) -> None:
+    """Выключить пересылку отзывов."""
+    await db.set_meta(FEEDBACK_META_KEY, "0")
+    await message.answer("❌ Сбор обратной связи остановлен.")
 
 
 # ---------- /raffle ----------
