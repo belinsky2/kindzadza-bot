@@ -63,6 +63,8 @@ async def seats_left() -> int:
 
 
 async def is_sold_out() -> bool:
+    if await db.get_meta("sold_out_override") == "1":
+        return True
     return await seats_left() <= 0
 
 

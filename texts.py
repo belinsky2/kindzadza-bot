@@ -5,6 +5,22 @@ import config
 
 # ===================== АНОНС / ПРИВЕТСТВИЕ =====================
 
+def greeting_sold_out() -> str:
+    links = []
+    if config.TG_LINK:
+        links.append(f"<a href=\"{config.TG_LINK}\">TG Киндзадза</a>")
+    if config.INSTA_LINK:
+        links.append(f"<a href=\"{config.INSTA_LINK}\">Инста Киндзадза</a>")
+    links_line = (" · ".join(links) + "\n") if links else ""
+    return (
+        "🎉 Все билеты проданы – спасибо за интерес к концерту «Киндзадза»!\n\n"
+        "К сожалению, регистрация закрыта: мест больше нет.\n\n"
+        f"📅 {config.EVENT_DATE}, {config.EVENT_TIME} – ждём тех, кто уже с нами!\n"
+        f"{links_line}"
+        "Следи за анонсами следующих вечеров 🥂"
+    )
+
+
 def greeting_announce() -> str:
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Как добраться</a>" if config.EVENT_MAP_URL else ""
     return (

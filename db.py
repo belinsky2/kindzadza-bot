@@ -321,6 +321,19 @@ async def count_by_status() -> dict[str, int]:
 
 # ---------- Рассылки (флаги) ----------
 
+async def set_meta(key: str, value: str) -> None:
+    await _db.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, value)
+    )
+    await _db.commit()
+
+
+async def get_meta(key: str) -> str | None:
+    cur = await _db.execute("SELECT value FROM meta WHERE key=?", (key,))
+    row = await cur.fetchone()
+    return row["value"] if row else None
+
+
 async def is_broadcast_sent(key: str) -> bool:
     cur = await _db.execute("SELECT 1 FROM broadcasts_log WHERE key=?", (key,))
     return await cur.fetchone() is not None

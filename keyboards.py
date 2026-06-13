@@ -17,9 +17,10 @@ def _contact_button() -> InlineKeyboardButton | None:
     )
 
 
-def register_kb() -> InlineKeyboardMarkup:
+def register_kb(sold_out: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✍️ Зарегистрироваться", callback_data="register")
+    if not sold_out:
+        kb.button(text="✍️ Зарегистрироваться", callback_data="register")
     contact = _contact_button()
     if contact:
         kb.row(contact)
@@ -27,16 +28,17 @@ def register_kb() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def returning_kb(status: str) -> InlineKeyboardMarkup:
+def returning_kb(status: str, sold_out: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    if status == db.STATUS_AWAITING_PAYMENT:
-        kb.button(text="💳 Завершить оплату", callback_data="register")
-    elif status == db.STATUS_REJECTED:
-        kb.button(text="📸 Прислать скрин заново", callback_data="register")
-    elif status == db.STATUS_DOOR:
-        kb.button(text="💳 Оплатить онлайн", callback_data="register")
-    else:
-        kb.button(text="🎟 Купить ещё билеты", callback_data="register")
+    if not sold_out:
+        if status == db.STATUS_AWAITING_PAYMENT:
+            kb.button(text="💳 Завершить оплату", callback_data="register")
+        elif status == db.STATUS_REJECTED:
+            kb.button(text="📸 Прислать скрин заново", callback_data="register")
+        elif status == db.STATUS_DOOR:
+            kb.button(text="💳 Оплатить онлайн", callback_data="register")
+        elif status == db.STATUS_CONFIRMED_ONLINE:
+            kb.button(text="🎟 Купить ещё билеты", callback_data="register")
     contact = _contact_button()
     if contact:
         kb.row(contact)

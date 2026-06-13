@@ -61,15 +61,22 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
     if reg:
         asyncio.create_task(sheets.sync_registration(reg))
 
+    sold_out = await segments.is_sold_out()
+
     if reg and reg.get("status") in RETURNING_STATUSES:
+        hint = texts.RETURNING_HINT if not sold_out else ""
         await message.answer(
-            texts.status_view(reg) + texts.RETURNING_HINT,
-            reply_markup=kb.returning_kb(reg["status"]),
+            texts.status_view(reg) + hint,
+            reply_markup=kb.returning_kb(reg["status"], sold_out=sold_out),
             disable_web_page_preview=True,
         )
         return
 
-    # Новый пользователь: анонс с афишей (если есть)
+    # Новый пользователь
+    if sold_out:
+        await message.answer(texts.greeting_sold_out(), disable_web_page_preview=True)
+        return
+
     if os.path.exists(config.ANNOUNCE_IMAGE):
         await message.answer_photo(
             FSInputFile(config.ANNOUNCE_IMAGE),
@@ -102,6 +109,9 @@ async def cmd_reset(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "register")
 async def on_register(call: CallbackQuery, state: FSMContext) -> None:
+    if await segments.is_sold_out():
+        await call.answer("Все билеты проданы – регистрация закрыта 🙏", show_alert=True)
+        return
     await call.answer()
     if not call.from_user.username:
         await call.message.answer(texts.NO_USERNAME)

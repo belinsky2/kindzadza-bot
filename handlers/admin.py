@@ -112,6 +112,27 @@ async def _mark_card(call: CallbackQuery, note: str) -> None:
         log.debug("Не удалось обновить карточку (необязательно).")
 
 
+# ---------- /soldout ----------
+
+@router.message(Command("soldout"))
+async def cmd_soldout(message: Message) -> None:
+    """Открыть/закрыть продажи: /soldout → закрыть, /soldout off → открыть."""
+    args = message.text.split()
+    turn_off = len(args) > 1 and args[1].strip().lower() == "off"
+    if turn_off:
+        await db.set_meta("sold_out_override", "0")
+        await message.answer("✅ Продажи открыты – бот снова принимает регистрации.")
+    else:
+        await db.set_meta("sold_out_override", "1")
+        taken = await db.seats_taken()
+        await message.answer(
+            f"🚫 Продажи закрыты – режим солд-аута включён.\n"
+            f"Занято мест: {taken}.\n\n"
+            "Новые гости увидят «Все билеты проданы».\n"
+            "Вернуть приём: <code>/soldout off</code>"
+        )
+
+
 # ---------- /refund ----------
 
 @router.message(Command("refund"))
