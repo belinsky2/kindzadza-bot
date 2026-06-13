@@ -321,6 +321,25 @@ async def count_by_status() -> dict[str, int]:
 
 # ---------- Рассылки (флаги) ----------
 
+async def get_raffle_pool() -> list[tuple[int, int]]:
+    """Пул розыгрыша: [(user_id, raffle_number), ...] для всех оплативших онлайн.
+
+    У гостя с 2 билетами — 2 числа в пуле, т.е. выше шанс выиграть.
+    """
+    cur = await _db.execute(
+        "SELECT user_id, raffle_numbers FROM registrations "
+        "WHERE status=? AND raffle_numbers IS NOT NULL",
+        (STATUS_CONFIRMED_ONLINE,),
+    )
+    pool: list[tuple[int, int]] = []
+    for row in await cur.fetchall():
+        for n in (row["raffle_numbers"] or "").split(","):
+            n = n.strip()
+            if n.isdigit():
+                pool.append((row["user_id"], int(n)))
+    return pool
+
+
 async def set_meta(key: str, value: str) -> None:
     await _db.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, value)

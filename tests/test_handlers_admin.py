@@ -8,6 +8,8 @@ import config
 import db
 from handlers.admin import (
     on_admin_decision,
+    cmd_raffle,
+    on_raffle,
     cmd_stats,
     cmd_addpost,
     cmd_broadcast,
@@ -16,6 +18,114 @@ from handlers.admin import (
     _pending_broadcast,
 )
 from tests.conftest import make_message, make_callback, make_bot
+
+
+# ==================== cmd_raffle / on_raffle ====================
+
+async def _setup_raffle_guests(n: int) -> list[int]:
+    """Создаёт n подтверждённых онлайн-гостей с номерами розыгрыша."""
+    uids = []
+    for i in range(n):
+        uid = 9000 + i
+        await db.ensure_user(uid, f"rguest{i}")
+        await db.set_name(uid, f"Гость {i}")
+        await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+        await db.set_raffle_numbers(uid, [i + 1])
+        uids.append(uid)
+    return uids
+
+
+async def test_raffle_cmd_shows_preview(fresh_db):
+    await _setup_raffle_guests(5)
+    msg = make_message(user_id=9999, text="/raffle")
+
+    await cmd_raffle(msg)
+
+    msg.answer.assert_awaited_once()
+    text = msg.answer.call_args[0][0]
+    assert "розыгрыш" in text.lower()
+    assert "5" in text  # 5 участников
+
+
+async def test_raffle_cmd_not_enough(fresh_db):
+    await _setup_raffle_guests(2)  # меньше 3
+    msg = make_message(user_id=9999, text="/raffle")
+
+    await cmd_raffle(msg)
+
+    text = msg.answer.call_args[0][0]
+    assert "недостаточно" in text.lower()
+
+
+async def test_raffle_picks_3_unique_winners(fresh_db):
+    uids = await _setup_raffle_guests(10)
+    bot = make_bot()
+
+    call = make_callback(data="raffle:run", user_id=9999)
+    call.message.edit_text = AsyncMock()
+
+    await on_raffle(call, bot)
+
+    # 3 победителя получили поздравление
+    winner_calls = [
+        c for c in bot.send_message.await_args_list
+        if "выиграл" in (c.args[1] if len(c.args) > 1 else "")
+    ]
+    assert len(winner_calls) == 3
+    winner_uids = {c.args[0] for c in winner_calls}
+    assert len(winner_uids) == 3  # уникальные гости
+
+    # 7 остальных получили утешительное
+    loser_calls = [
+        c for c in bot.send_message.await_args_list
+        if "удача" in (c.args[1] if len(c.args) > 1 else "")
+    ]
+    assert len(loser_calls) == 7
+
+    # Флаг выставлен
+    assert await db.get_meta("raffle_done") == "1"
+
+
+async def test_raffle_cancel(fresh_db):
+    call = make_callback(data="raffle:cancel", user_id=9999)
+    call.message.edit_reply_markup = AsyncMock()
+    bot = make_bot()
+
+    await on_raffle(call, bot)
+
+    bot.send_message.assert_not_awaited()
+    call.answer.assert_awaited()
+
+
+async def test_raffle_already_done_shows_warning(fresh_db):
+    await _setup_raffle_guests(5)
+    await db.set_meta("raffle_done", "1")
+    msg = make_message(user_id=9999, text="/raffle")
+
+    await cmd_raffle(msg)
+
+    text = msg.answer.call_args[0][0]
+    assert "уже проводился" in text.lower()
+
+
+async def test_raffle_guest_with_2_tickets_has_2_chances(fresh_db):
+    """Гость с 2 билетами имеет 2 номера в пуле — пул считается корректно."""
+    uid = 9100
+    await db.ensure_user(uid, "rich")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_raffle_numbers(uid, [1, 2])
+
+    for i in range(5):
+        u = 9101 + i
+        await db.ensure_user(u, f"r{i}")
+        await db.set_order(u, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+        await db.set_raffle_numbers(u, [10 + i])
+
+    pool = await db.get_raffle_pool()
+    uid_counts = {}
+    for u, _ in pool:
+        uid_counts[u] = uid_counts.get(u, 0) + 1
+    assert uid_counts[uid] == 2  # у богатого гостя 2 шанса
 
 
 # ==================== on_admin_decision (confirm) ====================

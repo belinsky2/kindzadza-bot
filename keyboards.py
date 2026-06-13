@@ -126,6 +126,14 @@ def checkin_arrived_kb(code: str, remaining: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def raffle_confirm_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🎰 Запустить розыгрыш!", callback_data="raffle:run")
+    kb.button(text="Отмена", callback_data="raffle:cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def kitchen_send_kb(user_id: int) -> InlineKeyboardMarkup:
     """Кнопка билетера: отправить заказ еды на кухню."""
     kb = InlineKeyboardBuilder()

@@ -473,6 +473,53 @@ def kitchen_send_failed() -> str:
     )
 
 
+# ===================== РОЗЫГРЫШ ДЕСЕРТОВ =====================
+
+def raffle_winner(reg: dict, winning_number: int) -> str:
+    return (
+        f"🎉 Поздравляем! Твой номер <b>№{winning_number}</b> выиграл!\n\n"
+        "Ты получаешь десерт на сегодняшнем концерте «Киндзадза» 🎂\n"
+        "Подойди к официанту и назови свой номер участника – он тебя угостит.\n\n"
+        "Приятного вечера! 🥂"
+    )
+
+
+def raffle_no_win() -> str:
+    return (
+        "В этот раз удача улыбнулась другим – но ты точно не останешься без сладкого! 😊\n\n"
+        "В меню есть потрясающие десерты – например, <b>Лимонное Брюле</b> – просто пушка! 🍋\n"
+        "Закажи у официанта – оно того стоит.\n\n"
+        "Спасибо, что ты с нами! 🥂"
+    )
+
+
+def raffle_admin_preview(total_guests: int, total_numbers: int, already_done: bool) -> str:
+    warn = "\n\n⚠️ Розыгрыш уже проводился! Запустить повторно?" if already_done else ""
+    return (
+        f"🎰 <b>Розыгрыш десертов</b>{warn}\n\n"
+        f"Участников: <b>{total_guests}</b> гостей · <b>{total_numbers}</b> номеров в пуле\n"
+        f"(у гостя с 2 билетами – 2 шанса)\n"
+        f"Призов: <b>3 десерта</b>\n\n"
+        "Нажми кнопку – бот случайно выберет 3 победителей и разошлёт им сообщения:"
+    )
+
+
+def raffle_admin_result(winner_regs: list[tuple[dict, int]], sent_w: int, sent_l: int) -> str:
+    medals = ["🥇", "🥈", "🥉"]
+    lines = ["🎰 <b>Розыгрыш проведён!</b>\n"]
+    for i, (reg, num) in enumerate(winner_regs):
+        medal = medals[i] if i < len(medals) else "🏅"
+        uname = f" @{reg['username']}" if reg.get("username") else ""
+        lines.append(f"{medal} №{num} – {reg.get('name', '–')}{uname}")
+    lines.append(f"\n✅ Поздравления отправлены: {sent_w}")
+    lines.append(f"😊 Утешительных отправлено: {sent_l}")
+    return "\n".join(lines)
+
+
+def raffle_not_enough() -> str:
+    return "Недостаточно участников для розыгрыша (нужно минимум 3 уникальных гостя)."
+
+
 # Подсказка на свободный текст от незарегистрированных/не оплативших
 FREE_TEXT_HINT = "Чтобы зарегистрироваться на концерт, нажми /start 👇"
 
