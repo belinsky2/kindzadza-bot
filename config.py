@@ -73,7 +73,7 @@ REMINDER_DAY: str = os.getenv("REMINDER_DAY", "2026-06-13 12:00").strip()
 
 # --- Ссылки ---
 TG_LINK: str = os.getenv("TG_LINK", "").strip()
-INSTA_LINK: str = os.getenv("INSTA_LINK", "").strip()
+INSTA_LINK: str = os.getenv("INSTA_LINK", "https://www.instagram.com/aram_belinsky").strip()
 BOT_LINK: str = os.getenv("BOT_LINK", "").strip()  # для CTA в постах
 
 # --- Реквизиты оплаты (текст показывается пользователю) ---
