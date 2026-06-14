@@ -5,6 +5,16 @@ import config
 
 # ===================== АНОНС / ПРИВЕТСТВИЕ =====================
 
+def greeting_closed() -> str:
+    insta = f"\n\n📸 <a href=\"{config.INSTA_LINK}\">Подписывайтесь на инстаграм</a>" if config.INSTA_LINK else ""
+    return (
+        "Привет! 👋\n\n"
+        "Сейчас бот временно не принимает заявки.\n\n"
+        "Мы скоро вернёмся – следите за новыми анонсами «Киндзадза» 🎤"
+        f"{insta}"
+    )
+
+
 def greeting_sold_out() -> str:
     links = []
     if config.TG_LINK:

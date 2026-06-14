@@ -232,6 +232,26 @@ async def cmd_soldout(message: Message) -> None:
         )
 
 
+# ---------- /close / /open ----------
+
+@router.message(Command("close"))
+async def cmd_close(message: Message) -> None:
+    """Закрыть бота для новых пользователей – они увидят «скоро вернёмся»."""
+    await db.set_meta("bot_closed", "1")
+    await message.answer(
+        "🔒 Бот закрыт для новых пользователей.\n"
+        "Они видят: «Мы скоро вернёмся».\n\n"
+        "Открыть снова: <code>/open</code>"
+    )
+
+
+@router.message(Command("open"))
+async def cmd_open(message: Message) -> None:
+    """Открыть бота для новых пользователей."""
+    await db.set_meta("bot_closed", "0")
+    await message.answer("✅ Бот открыт – новые пользователи снова видят анонс.")
+
+
 # ---------- /refund ----------
 
 @router.message(Command("refund"))

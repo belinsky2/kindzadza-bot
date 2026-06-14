@@ -63,6 +63,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         asyncio.create_task(sheets.sync_registration(reg))
 
     sold_out = await segments.is_sold_out()
+    bot_closed = await db.get_meta("bot_closed") == "1"
 
     if reg and reg.get("status") in RETURNING_STATUSES:
         hint = texts.RETURNING_HINT if not sold_out else ""
@@ -71,6 +72,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
             reply_markup=kb.returning_kb(reg["status"], sold_out=sold_out),
             disable_web_page_preview=True,
         )
+        return
+
+    # Новый пользователь — бот закрыт
+    if bot_closed:
+        await message.answer(texts.greeting_closed(), disable_web_page_preview=True)
         return
 
     # Новый пользователь
