@@ -33,23 +33,14 @@ async def _set_commands(bot: Bot) -> None:
     if config.ADMIN_GROUP_ID:
         await bot.set_my_commands(
             [
-                BotCommand(command="help", description="Список всех команд"),
+                BotCommand(command="help", description="Все команды с описанием"),
                 BotCommand(command="stats", description="Статистика по регистрациям"),
                 BotCommand(command="guests", description="Список всех гостей"),
                 BotCommand(command="announce", description="Разослать анонс всем"),
-                BotCommand(command="set_announce", description="Запомнить афишу (ответом на фото)"),
                 BotCommand(command="broadcast", description="Рассылка по сегментам"),
-                BotCommand(command="addpost", description="Добавить пост в очередь"),
-                BotCommand(command="post_now", description="Опубликовать следующий пост"),
                 BotCommand(command="close", description="Закрыть бота для новых гостей"),
                 BotCommand(command="open", description="Открыть бота снова"),
-                BotCommand(command="soldout", description="Солд-аут (off — выключить)"),
                 BotCommand(command="reset_event", description="Сброс под новое мероприятие"),
-                BotCommand(command="refund", description="Вернуть билет (user_id/@username)"),
-                BotCommand(command="raffle", description="Провести розыгрыш"),
-                BotCommand(command="feedback", description="Запросить обратную связь"),
-                BotCommand(command="feedback_off", description="Остановить сбор отзывов"),
-                BotCommand(command="sync_sheets", description="Выгрузить в Google Таблицу"),
             ],
             scope=BotCommandScopeChat(chat_id=config.ADMIN_GROUP_ID),
         )

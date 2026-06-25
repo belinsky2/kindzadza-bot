@@ -111,15 +111,6 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     # периодическая синхронизация с Google Sheets
     sched.add_job(_periodic_sync, "interval", minutes=30, id="sheets_sync")
 
-    # ежедневный пост
-    try:
-        hh, mm = config.DAILY_POST_TIME.split(":")
-        sched.add_job(publish_next_post, "cron", hour=int(hh), minute=int(mm),
-                      args=[bot], id="daily_post")
-    except Exception:
-        log.exception("Не удалось настроить ежедневный пост (DAILY_POST_TIME=%s)",
-                      config.DAILY_POST_TIME)
-
     # напоминания
     eve = _parse_dt(config.REMINDER_EVE)
     if eve:
