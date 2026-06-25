@@ -1,8 +1,14 @@
 """Зеркало регистраций в Google Таблице. Graceful no-op без креды.
 
-Два листа в одной таблице:
-  «Все гости»    — все записи включая просто зашедших
+Два листа в одной таблице. Набор колонок зависит от типа события:
+
+Платное событие (FREE_EVENT=false):
+  «Все гости»    — все записи включая просто зашедших (со способом и суммой)
   «Оплатившие»   — только confirmed_online, с колонкой «Заказ еды»
+
+Бесплатное событие (FREE_EVENT=true):
+  «Все гости»          — все записи без колонок оплаты
+  «Зарегистрированные» — только зарегистрировавшиеся (confirmed_online)
 
 gspread синхронный — блокирующие вызовы уносим в поток через asyncio.to_thread,
 чтобы не вешать event loop бота.
@@ -20,9 +26,10 @@ log = logging.getLogger(__name__)
 
 _sh = None          # gspread Spreadsheet
 _ws_all = None      # лист «Все гости»
-_ws_paid = None     # лист «Оплатившие»
+_ws_paid = None     # лист «Оплатившие» / «Зарегистрированные»
 
-HEADER_ALL = [
+# --- Платное событие ---
+HEADER_ALL_PAID = [
     "user_id", "Имя", "Ник", "Кол-во", "Способ",
     "Сумма", "Статус", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
 ]
@@ -30,6 +37,17 @@ HEADER_ALL = [
 HEADER_PAID = [
     "user_id", "Имя", "Ник", "Кол-во билетов", "Способ",
     "Сумма", "Номера розыгрыша", "Заказ еды", "Пришло", "Создано",
+]
+
+# --- Бесплатное событие (без колонок оплаты) ---
+HEADER_ALL_FREE = [
+    "user_id", "Имя", "Ник", "Кол-во мест",
+    "Статус", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
+]
+
+HEADER_REG_FREE = [
+    "user_id", "Имя", "Ник", "Кол-во мест",
+    "Номера розыгрыша", "Пришло", "Создано",
 ]
 
 STATUS_LABELS = {
@@ -41,6 +59,26 @@ STATUS_LABELS = {
     "rejected": "отклонён",
     "refunded": "возврат",
 }
+
+# При бесплатном входе статус confirmed_online означает «зарегистрирован»
+STATUS_LABELS_FREE = {**STATUS_LABELS, "confirmed_online": "зарегистрирован"}
+
+
+def _status_label(status: str | None) -> str:
+    labels = STATUS_LABELS_FREE if config.FREE_EVENT else STATUS_LABELS
+    return labels.get(status, status or "")
+
+
+def _header_all() -> list:
+    return HEADER_ALL_FREE if config.FREE_EVENT else HEADER_ALL_PAID
+
+
+def _header_second() -> list:
+    return HEADER_REG_FREE if config.FREE_EVENT else HEADER_PAID
+
+
+def _second_title() -> str:
+    return "Зарегистрированные" if config.FREE_EVENT else "Оплатившие"
 
 
 def _get_or_create_ws(sh, title: str, header: list):
@@ -71,8 +109,8 @@ def _init_sync() -> bool:
         )
         client = gspread.authorize(creds)
         _sh = client.open_by_key(config.SPREADSHEET_ID)
-        _ws_all = _get_or_create_ws(_sh, "Все гости", HEADER_ALL)
-        _ws_paid = _get_or_create_ws(_sh, "Оплатившие", HEADER_PAID)
+        _ws_all = _get_or_create_ws(_sh, "Все гости", _header_all())
+        _ws_paid = _get_or_create_ws(_sh, _second_title(), _header_second())
         log.info("Google Sheets подключены (2 листа).")
         return True
     except Exception:
@@ -99,15 +137,26 @@ def _arrived_str(reg: dict) -> str:
 
 
 def _row_all(reg: dict) -> list:
+    uid = str(reg["user_id"])
+    name = reg.get("name") or ""
+    nick = f"@{reg['username']}" if reg.get("username") else ""
+    if config.FREE_EVENT:
+        return [
+            uid, name, nick,
+            reg.get("qty") or "",
+            _status_label(reg.get("status")),
+            reg.get("raffle_numbers") or "",
+            _arrived_str(reg),
+            _fmt_ts(reg.get("created_at")),
+            _fmt_ts(reg.get("updated_at")),
+        ]
     method = config.PAYMENT_METHODS.get(reg.get("payment_method") or "", {}).get("label", "")
     return [
-        str(reg["user_id"]),
-        reg.get("name") or "",
-        f"@{reg['username']}" if reg.get("username") else "",
+        uid, name, nick,
         reg.get("qty") or "",
         method,
         reg.get("amount") or "",
-        STATUS_LABELS.get(reg.get("status"), reg.get("status") or ""),
+        _status_label(reg.get("status")),
         reg.get("raffle_numbers") or "",
         _arrived_str(reg),
         _fmt_ts(reg.get("created_at")),
@@ -116,11 +165,20 @@ def _row_all(reg: dict) -> list:
 
 
 def _row_paid(reg: dict) -> list:
+    uid = str(reg["user_id"])
+    name = reg.get("name") or ""
+    nick = f"@{reg['username']}" if reg.get("username") else ""
+    if config.FREE_EVENT:
+        return [
+            uid, name, nick,
+            reg.get("qty") or "",
+            reg.get("raffle_numbers") or "",
+            _arrived_str(reg),
+            _fmt_ts(reg.get("created_at")),
+        ]
     method = config.PAYMENT_METHODS.get(reg.get("payment_method") or "", {}).get("label", "")
     return [
-        str(reg["user_id"]),
-        reg.get("name") or "",
-        f"@{reg['username']}" if reg.get("username") else "",
+        uid, name, nick,
         reg.get("qty") or "",
         method,
         reg.get("amount") or "",
@@ -161,10 +219,10 @@ def _rewrite_all_sync(regs: list[dict]) -> int:
     paid = [r for r in regs if r.get("status") == "confirmed_online"]
     try:
         _ws_all.clear()
-        _ws_all.update("A1", [HEADER_ALL] + [_row_all(r) for r in regs],
+        _ws_all.update("A1", [_header_all()] + [_row_all(r) for r in regs],
                        value_input_option="USER_ENTERED")
         _ws_paid.clear()
-        _ws_paid.update("A1", [HEADER_PAID] + [_row_paid(r) for r in paid],
+        _ws_paid.update("A1", [_header_second()] + [_row_paid(r) for r in paid],
                         value_input_option="USER_ENTERED")
         return len(regs)
     except Exception:
