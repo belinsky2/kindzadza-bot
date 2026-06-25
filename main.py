@@ -36,7 +36,6 @@ async def _set_commands(bot: Bot) -> None:
                 BotCommand(command="help", description="Все команды с описанием"),
                 BotCommand(command="stats", description="Статистика по регистрациям"),
                 BotCommand(command="guests", description="Список всех гостей"),
-                BotCommand(command="announce", description="Разослать анонс всем"),
                 BotCommand(command="broadcast", description="Рассылка по сегментам"),
             ],
             scope=BotCommandScopeChat(chat_id=config.ADMIN_GROUP_ID),
