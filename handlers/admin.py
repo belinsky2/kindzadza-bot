@@ -332,12 +332,13 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     has_disk = os.path.exists(config.ANNOUNCE_IMAGE)
 
     async def send_one(b: Bot, uid: int) -> None:
+        markup = kb.register_kb()
         if file_id:
-            await b.send_photo(uid, file_id, caption=caption)
+            await b.send_photo(uid, file_id, caption=caption, reply_markup=markup)
         elif has_disk:
-            await b.send_photo(uid, FSInputFile(config.ANNOUNCE_IMAGE), caption=caption)
+            await b.send_photo(uid, FSInputFile(config.ANNOUNCE_IMAGE), caption=caption, reply_markup=markup)
         else:
-            await b.send_message(uid, caption, disable_web_page_preview=True)
+            await b.send_message(uid, caption, reply_markup=markup, disable_web_page_preview=True)
 
     import broadcast as bc_mod
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
