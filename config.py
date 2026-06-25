@@ -45,6 +45,8 @@ ADMIN_IDS: set[int] = {
 # --- Google Sheets (опционально; без креды — no-op) ---
 GOOGLE_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json").strip()
 SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "").strip()
+# Префикс имён листов: "27.06" → «27.06 Все гости» / «27.06 Зарегистрированные»
+SHEET_TAG: str = os.getenv("SHEET_TAG", "").strip()
 
 # --- Время / таймзона ---
 TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()

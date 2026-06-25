@@ -77,8 +77,15 @@ def _header_second() -> list:
     return HEADER_REG_FREE if config.FREE_EVENT else HEADER_PAID
 
 
+def _sheet_name(base: str) -> str:
+    """Добавляет SHEET_TAG к имени листа: «27.06 Все гости»."""
+    tag = config.SHEET_TAG
+    return f"{tag} {base}" if tag else base
+
+
 def _second_title() -> str:
-    return "Зарегистрированные" if config.FREE_EVENT else "Оплатившие"
+    base = "Зарегистрированные" if config.FREE_EVENT else "Оплатившие"
+    return _sheet_name(base)
 
 
 def _get_or_create_ws(sh, title: str, header: list):
@@ -109,7 +116,7 @@ def _init_sync() -> bool:
         )
         client = gspread.authorize(creds)
         _sh = client.open_by_key(config.SPREADSHEET_ID)
-        _ws_all = _get_or_create_ws(_sh, "Все гости", _header_all())
+        _ws_all = _get_or_create_ws(_sh, _sheet_name("Все гости"), _header_all())
         _ws_paid = _get_or_create_ws(_sh, _second_title(), _header_second())
         log.info("Google Sheets подключены (2 листа).")
         return True
