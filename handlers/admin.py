@@ -114,6 +114,14 @@ async def _mark_card(call: CallbackQuery, note: str) -> None:
         log.debug("Не удалось обновить карточку (необязательно).")
 
 
+# ---------- /help ----------
+
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    """Список всех команд админ-группы с описанием."""
+    await message.answer(texts.admin_help(), disable_web_page_preview=True)
+
+
 # ---------- /feedback ----------
 
 @router.message(Command("feedback"))
