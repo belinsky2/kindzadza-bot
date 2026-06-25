@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import config
 import db
+import texts
 from handlers.registration import (
     cmd_start,
     cmd_status,
@@ -771,3 +772,52 @@ async def test_free_text_notifies_admin_group(fresh_db):
     call_args = bot.send_message.call_args[0]
     assert call_args[0] == -100500
     assert "люля-кебаб" in call_args[1]
+
+
+# ==================== Бесплатное событие (FREE_EVENT) ====================
+
+async def test_free_event_qty_registers_without_payment(fresh_db):
+    """FREE_EVENT: выбор кол-ва сразу подтверждает бронь и выдаёт QR (без оплаты)."""
+    uid = 900
+    await db.ensure_user(uid, "free_guest")
+    await db.set_name(uid, "Гость")
+
+    call = make_callback(data="qty:2", user_id=uid, username="free_guest")
+    state = make_state()
+
+    with patch("config.FREE_EVENT", True), \
+         patch("sheets.sync_registration", new=AsyncMock()):
+        await on_qty(call, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE
+    assert reg["qty"] == 2
+    assert reg["payment_method"] == "free"
+    assert reg["ticket_code"]  # QR-код выдан
+    state.clear.assert_awaited()
+
+
+async def test_free_event_greeting_is_show_za_stolom(fresh_db):
+    """FREE_EVENT: анонс — про «Шоу за столом», без упоминания оплаты."""
+    with patch("config.FREE_EVENT", True):
+        text = texts.greeting_announce()
+    assert "Шоу за столом" in text
+    assert "оплат" not in text.lower()
+
+
+async def test_free_event_custom_qty_registers(fresh_db):
+    """FREE_EVENT: ручной ввод кол-ва тоже регистрирует без оплаты."""
+    uid = 901
+    await db.ensure_user(uid, "free_guest2")
+    await db.set_name(uid, "Гость2")
+
+    msg = make_message(user_id=uid, username="free_guest2", text="3")
+    state = make_state()
+
+    with patch("config.FREE_EVENT", True), \
+         patch("sheets.sync_registration", new=AsyncMock()):
+        await on_qty_custom(msg, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE
+    assert reg["qty"] == 3

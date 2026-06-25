@@ -62,6 +62,9 @@ EVENT_CAPACITY: int = _int("EVENT_CAPACITY", 60)
 SEATS_REVEAL_THRESHOLD: int = _int("SEATS_REVEAL_THRESHOLD", 15)
 MAX_TICKETS_PER_ORDER: int = _int("MAX_TICKETS_PER_ORDER", 10)
 
+# --- Режим бесплатного входа (регистрация без оплаты, только бронь места) ---
+FREE_EVENT: bool = _bool("FREE_EVENT", False)
+
 # --- Рассылка / посты ---
 DAILY_POST_TIME: str = os.getenv("DAILY_POST_TIME", "10:00").strip()  # HH:MM по TZ
 CONFIRM_SLA: str = os.getenv("CONFIRM_SLA", "пары часов").strip()

@@ -221,6 +221,25 @@ async def refund(user_id: int) -> None:
     await _db.commit()
 
 
+async def reset_all_registrations() -> int:
+    """Сброс под новое мероприятие: статусы → 'new', гасит брони/QR/заказы/отметки.
+
+    Сами строки (user_id + username) сохраняются, чтобы старые гости при /start
+    увидели новый анонс. Счётчик розыгрыша обнуляется. Возвращает число записей.
+    """
+    cur = await _db.execute("SELECT COUNT(*) AS c FROM registrations")
+    n = int((await cur.fetchone())["c"])
+    await _db.execute(
+        "UPDATE registrations SET status='new', qty=1, payment_method=NULL, amount=NULL, "
+        "raffle_numbers=NULL, ticket_code=NULL, checked_in_at=NULL, arrived_count=NULL, "
+        "food_order=NULL, updated_at=?",
+        (_now(),),
+    )
+    await _db.execute("UPDATE meta SET value='0' WHERE key='raffle_counter'")
+    await _db.commit()
+    return n
+
+
 async def check_in(user_id: int, arrived: int) -> None:
     await _db.execute(
         "UPDATE registrations SET checked_in_at=?, arrived_count=?, updated_at=? WHERE user_id=?",

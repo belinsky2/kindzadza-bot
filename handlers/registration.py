@@ -18,6 +18,7 @@ import scheduler as sched_mod
 import segments
 import sheets
 import texts
+import tickets
 from handlers import checkin
 
 log = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
     bot_closed = await db.get_meta("bot_closed") == "1"
 
     if reg and reg.get("status") in RETURNING_STATUSES:
-        hint = texts.RETURNING_HINT if not sold_out else ""
+        hint = texts.RETURNING_HINT if (not sold_out and not config.FREE_EVENT) else ""
         await message.answer(
             texts.status_view(reg) + hint,
             reply_markup=kb.returning_kb(reg["status"], sold_out=sold_out),
@@ -150,7 +151,7 @@ async def on_qty(call: CallbackQuery, state: FSMContext) -> None:
         await call.message.answer(texts.ASK_QTY_CUSTOM)
         return
     qty = int(value)
-    await _go_to_payment(call.message, state, call.from_user.id, qty)
+    await _after_qty(call.message, state, call.from_user.id, qty)
 
 
 @router.message(Form.waiting_qty_custom, F.text)
@@ -159,7 +160,30 @@ async def on_qty_custom(message: Message, state: FSMContext) -> None:
     if not raw.isdigit() or not (1 <= int(raw) <= config.MAX_TICKETS_PER_ORDER):
         await message.answer(texts.QTY_BAD.format(max=config.MAX_TICKETS_PER_ORDER))
         return
-    await _go_to_payment(message, state, message.from_user.id, int(raw))
+    await _after_qty(message, state, message.from_user.id, int(raw))
+
+
+async def _after_qty(message: Message, state: FSMContext, user_id: int, qty: int) -> None:
+    """После выбора кол-ва: бесплатное событие → сразу бронь, иначе → выбор оплаты."""
+    if config.FREE_EVENT:
+        await _register_free(message, state, user_id, qty)
+    else:
+        await _go_to_payment(message, state, user_id, qty)
+
+
+async def _register_free(message: Message, state: FSMContext, user_id: int, qty: int) -> None:
+    """Бесплатная регистрация: бронь места без оплаты + QR-билет."""
+    await db.set_order(user_id, qty, "free", "донат", db.STATUS_CONFIRMED_ONLINE)
+    reg = await db.get_registration(user_id)
+    if not reg.get("ticket_code"):
+        await db.set_ticket_code(user_id, tickets.new_code())
+        reg = await db.get_registration(user_id)
+    await state.clear()
+    asyncio.create_task(sheets.sync_registration(reg))
+    await message.answer(texts.registered_free(reg), disable_web_page_preview=True)
+    if config.BOT_USERNAME and reg.get("ticket_code"):
+        qr = tickets.make_qr_png(tickets.ticket_link(reg["ticket_code"]))
+        await message.answer_photo(qr, caption=texts.ticket_caption(reg))
 
 
 async def _go_to_payment(message: Message, state: FSMContext, user_id: int, qty: int) -> None:

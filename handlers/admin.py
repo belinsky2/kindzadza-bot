@@ -282,6 +282,78 @@ async def cmd_refund(message: Message) -> None:
     await message.answer(texts.refund_done(reg))
 
 
+# ---------- /announce (рассылка анонса всем) ----------
+
+@router.message(Command("announce"))
+async def cmd_announce(message: Message) -> None:
+    """Разослать текущий анонс (фото + текст) всем пользователям бота."""
+    total = len(await db.list_all_user_ids())
+    await message.answer(
+        texts.announce_admin_preview(total),
+        reply_markup=kb.announce_confirm_kb(),
+        disable_web_page_preview=True,
+    )
+
+
+@router.callback_query(F.data.startswith("ann:"))
+async def on_announce(call: CallbackQuery, bot: Bot) -> None:
+    action = call.data.split(":", 1)[1]
+    if action == "cancel":
+        await call.answer("Отменено")
+        await call.message.edit_reply_markup(reply_markup=None)
+        return
+
+    await call.answer("Рассылаю…")
+    uids = await db.list_all_user_ids()
+    caption = texts.greeting_announce()
+    has_img = os.path.exists(config.ANNOUNCE_IMAGE)
+
+    async def send_one(b: Bot, uid: int) -> None:
+        if has_img:
+            await b.send_photo(uid, FSInputFile(config.ANNOUNCE_IMAGE), caption=caption)
+        else:
+            await b.send_message(uid, caption, disable_web_page_preview=True)
+
+    import broadcast as bc_mod
+    sent, failed = await bc_mod.broadcast(bot, uids, send_one)
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer(
+        f"📣 Анонс разослан: отправлено {sent}, ошибок {failed}."
+    )
+
+
+# ---------- /reset_event (сброс под новое мероприятие) ----------
+
+@router.message(Command("reset_event"))
+async def cmd_reset_event(message: Message) -> None:
+    """Сброс всех регистраций под новое мероприятие (пользователи сохраняются)."""
+    total = len(await db.list_all_user_ids())
+    await message.answer(
+        texts.reset_event_preview(total),
+        reply_markup=kb.reset_event_confirm_kb(),
+    )
+
+
+@router.callback_query(F.data.startswith("rev:"))
+async def on_reset_event(call: CallbackQuery) -> None:
+    action = call.data.split(":", 1)[1]
+    if action == "cancel":
+        await call.answer("Отменено")
+        await call.message.edit_reply_markup(reply_markup=None)
+        return
+
+    n = await db.reset_all_registrations()
+    # сбрасываем операционные флаги прошлого события
+    for key in ("sold_out_override", "raffle_done", FEEDBACK_META_KEY, "bot_closed"):
+        await db.set_meta(key, "0")
+    # перезаписываем Google-таблицу под чистый лист
+    regs = await db.get_all_registrations(include_new=True)
+    await sheets.sync_all(regs)
+    await call.answer("Готово ✅")
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer(texts.reset_event_done(n))
+
+
 # ---------- /guests ----------
 
 @router.message(Command("guests"))
@@ -348,7 +420,7 @@ async def cmd_stats(message: Message) -> None:
         lines.append("")
         lines.append("<b>Выручка (подтверждённые онлайн):</b>")
         for method, qty in rev:
-            if method:
+            if method and method in config.PAYMENT_METHODS:
                 lines.append(f"• {config.format_amount(method, qty)} ({qty} билетов)")
 
     await message.answer("\n".join(lines))

@@ -31,6 +31,8 @@ def greeting_sold_out() -> str:
 
 
 def greeting_announce() -> str:
+    if config.FREE_EVENT:
+        return _greeting_announce_free()
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Как добраться</a>" if config.EVENT_MAP_URL else ""
     return (
         "Привет! 👋\n\n"
@@ -42,6 +44,44 @@ def greeting_announce() -> str:
         "📸 Будет фотограф – красивые кадры с вечера выложим в группу ресторана.\n"
         "🎂 Оплати <b>онлайн</b> – гарантируешь место и участвуешь в розыгрыше десертов.\n\n"
         "👇 Регистрируйся – мест немного!"
+    )
+
+
+def _greeting_announce_free() -> str:
+    """Анонс бесплатного мероприятия «Шоу за столом» (FREE_EVENT)."""
+    loc = config.EVENT_LOCATION
+    if config.EVENT_MAP_URL:
+        loc = f"<a href=\"{config.EVENT_MAP_URL}\">{config.EVENT_LOCATION}</a>"
+    return (
+        "Привет! 👋\n\n"
+        "На днях собрались с комиками, посидели, поболтали и так душевно поржали, "
+        "что захотелось разделить эту атмосферу с вами.\n"
+        "Мы запустили 🎤 <b>«Шоу за столом»</b> в ресторане «Кинзадза» и приглашаем вас "
+        "на пилотный выпуск.\n\n"
+        "Без сцены и пафоса. Просто хороший вечер в кругу своих: истории, шутки, "
+        "разговоры, темы из зала и живое общение за одним столом. 🍷🍽\n\n"
+        f"📍 {loc}\n"
+        f"📆 Дата: {config.EVENT_DATE}\n"
+        f"🕖 Сбор гостей – {config.DOORS_TIME}\n"
+        f"🎤 Начало – {config.EVENT_TIME}\n"
+        "🎟 Вход свободный – за донат 💵\n\n"
+        "👇 Регистрируйся – мест всё также немного!"
+    )
+
+
+def registered_free(reg: dict) -> str:
+    """Подтверждение брони на бесплатном мероприятии (FREE_EVENT)."""
+    map_line = f" – <a href=\"{config.EVENT_MAP_URL}\">карта</a>" if config.EVENT_MAP_URL else ""
+    return (
+        "🎉 Готово – ты в списке гостей «Шоу за столом»!\n\n"
+        f"👤 Имя: <b>{reg.get('name', '–')}</b>\n"
+        f"🎟 Мест: <b>{reg.get('qty', 1)}</b>\n\n"
+        f"📆 {config.EVENT_DATE}\n"
+        f"🕖 Сбор гостей – {config.DOORS_TIME}, начало – {config.EVENT_TIME}\n"
+        f"📍 {config.EVENT_LOCATION}{map_line}\n"
+        "🎟 Вход свободный – за донат 💵\n\n"
+        "🎫 Твой QR-билет – следующим сообщением. Покажи его на входе.\n"
+        f"Приходи к {config.DOORS_TIME} – будет тепло и весело 🥂"
     )
 
 
@@ -187,6 +227,12 @@ def status_view(reg: dict | None) -> str:
     status = reg["status"]
     qty = reg.get("qty", 1)
     if status == "confirmed_online":
+        if config.FREE_EVENT:
+            return (
+                f"✅ Ты зарегистрирован на «Шоу за столом». Мест: <b>{qty}</b>.\n"
+                f"📆 {config.EVENT_DATE}, сбор гостей {config.DOORS_TIME}.\n"
+                "Покажи свой QR на входе. Ждём тебя 🥂"
+            )
         nums = reg.get("raffle_numbers") or ""
         pretty = ", ".join(f"№{n}" for n in nums.split(",")) if nums else "–"
         return (
@@ -550,6 +596,34 @@ def feedback_header(reg: dict) -> str:
 
 # Подсказка на свободный текст от незарегистрированных/не оплативших
 FREE_TEXT_HINT = "Чтобы зарегистрироваться на концерт, нажми /start 👇"
+
+
+# ===================== АНОНС-РАССЫЛКА / СБРОС СОБЫТИЯ =====================
+
+def announce_admin_preview(total_users: int) -> str:
+    return (
+        "📣 <b>Рассылка анонса</b>\n\n"
+        f"Получат все пользователи бота: <b>{total_users}</b>.\n"
+        "Уйдёт текущий анонс (фото + текст), который видят новые гости.\n\n"
+        "Разослать?"
+    )
+
+
+def reset_event_preview(total_users: int) -> str:
+    return (
+        "🔄 <b>Сброс под новое мероприятие</b>\n\n"
+        f"Записей в базе: <b>{total_users}</b>.\n"
+        "У всех гостей сбросятся: статус, кол-во, QR-билеты, заказы еды и отметки прихода.\n"
+        "Сами пользователи останутся – при /start увидят новый анонс и зарегистрируются заново.\n\n"
+        "⚠️ Действие необратимо. Продолжить?"
+    )
+
+
+def reset_event_done(n: int) -> str:
+    return (
+        f"✅ Сброшено записей: <b>{n}</b>.\n"
+        "Бот готов к новому мероприятию – гости регистрируются с чистого листа."
+    )
 
 
 def post_cta(segment: str | None, scarcity: str | None) -> str:

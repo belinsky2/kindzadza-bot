@@ -37,7 +37,7 @@ def returning_kb(status: str, sold_out: bool = False) -> InlineKeyboardMarkup:
             kb.button(text="📸 Прислать скрин заново", callback_data="register")
         elif status == db.STATUS_DOOR:
             kb.button(text="💳 Оплатить онлайн", callback_data="register")
-        elif status == db.STATUS_CONFIRMED_ONLINE:
+        elif status == db.STATUS_CONFIRMED_ONLINE and not config.FREE_EVENT:
             kb.button(text="🎟 Купить ещё билеты", callback_data="register")
     contact = _contact_button()
     if contact:
@@ -138,6 +138,22 @@ def kitchen_send_kb(user_id: int) -> InlineKeyboardMarkup:
     """Кнопка билетера: отправить заказ еды на кухню."""
     kb = InlineKeyboardBuilder()
     kb.button(text="🍽 Отправить на кухню", callback_data=f"kit:{user_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def announce_confirm_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📣 Разослать анонс всем", callback_data="ann:send")
+    kb.button(text="Отмена", callback_data="ann:cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def reset_event_confirm_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔄 Да, сбросить под новое событие", callback_data="rev:do")
+    kb.button(text="Отмена", callback_data="rev:cancel")
     kb.adjust(1)
     return kb.as_markup()
 
