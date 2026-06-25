@@ -47,11 +47,15 @@ def greeting_announce() -> str:
     )
 
 
+# Реквизиты мероприятия «Шоу за столом» (захардкожены — событие разовое).
+_SHOW_VENUE = (
+    "<a href=\"https://maps.app.goo.gl/wF9vGJBekaXh2tYv6\">"
+    "Грузинский ресторан Kinzadza</a>"
+)
+
+
 def _greeting_announce_free() -> str:
     """Анонс бесплатного мероприятия «Шоу за столом» (FREE_EVENT)."""
-    loc = config.EVENT_LOCATION
-    if config.EVENT_MAP_URL:
-        loc = f"<a href=\"{config.EVENT_MAP_URL}\">{config.EVENT_LOCATION}</a>"
     return (
         "Привет! 👋\n\n"
         "На днях собрались с комиками, посидели, поболтали и так душевно поржали, "
@@ -60,10 +64,10 @@ def _greeting_announce_free() -> str:
         "на пилотный выпуск.\n\n"
         "Без сцены и пафоса. Просто хороший вечер в кругу своих: истории, шутки, "
         "разговоры, темы из зала и живое общение за одним столом. 🍷🍽\n\n"
-        f"📍 {loc}\n"
-        f"📆 Дата: {config.EVENT_DATE}\n"
-        f"🕖 Сбор гостей – {config.DOORS_TIME}\n"
-        f"🎤 Начало – {config.EVENT_TIME}\n"
+        f"📍 {_SHOW_VENUE}\n"
+        "📆 Дата: 27 июня – суббота\n"
+        "🕖 Сбор гостей – 19:00\n"
+        "🎤 Начало – 20:00\n"
         "🎟 Вход свободный – за донат 💵\n\n"
         "👇 Регистрируйся – мест всё также немного!"
     )
@@ -71,17 +75,16 @@ def _greeting_announce_free() -> str:
 
 def registered_free(reg: dict) -> str:
     """Подтверждение брони на бесплатном мероприятии (FREE_EVENT)."""
-    map_line = f" – <a href=\"{config.EVENT_MAP_URL}\">карта</a>" if config.EVENT_MAP_URL else ""
     return (
         "🎉 Готово – ты в списке гостей «Шоу за столом»!\n\n"
         f"👤 Имя: <b>{reg.get('name', '–')}</b>\n"
         f"🎟 Мест: <b>{reg.get('qty', 1)}</b>\n\n"
-        f"📆 {config.EVENT_DATE}\n"
-        f"🕖 Сбор гостей – {config.DOORS_TIME}, начало – {config.EVENT_TIME}\n"
-        f"📍 {config.EVENT_LOCATION}{map_line}\n"
+        "📆 27 июня – суббота\n"
+        "🕖 Сбор гостей – 19:00, начало – 20:00\n"
+        f"📍 {_SHOW_VENUE}\n"
         "🎟 Вход свободный – за донат 💵\n\n"
         "🎫 Твой QR-билет – следующим сообщением. Покажи его на входе.\n"
-        f"Приходи к {config.DOORS_TIME} – будет тепло и весело 🥂"
+        "Приходи к 19:00 в эту субботу – будет тепло и весело 🥂"
     )
 
 
@@ -230,7 +233,7 @@ def status_view(reg: dict | None) -> str:
         if config.FREE_EVENT:
             return (
                 f"✅ Ты зарегистрирован на «Шоу за столом». Мест: <b>{qty}</b>.\n"
-                f"📆 {config.EVENT_DATE}, сбор гостей {config.DOORS_TIME}.\n"
+                "📆 27 июня – суббота, сбор гостей 19:00.\n"
                 "Покажи свой QR на входе. Ждём тебя 🥂"
             )
         nums = reg.get("raffle_numbers") or ""

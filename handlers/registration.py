@@ -85,17 +85,21 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         await message.answer(texts.greeting_sold_out(), disable_web_page_preview=True)
         return
 
-    if os.path.exists(config.ANNOUNCE_IMAGE):
+    caption = texts.greeting_announce()
+    announce_file_id = await db.get_meta("announce_file_id")
+    if announce_file_id:
+        await message.answer_photo(
+            announce_file_id, caption=caption, reply_markup=kb.register_kb(),
+        )
+    elif os.path.exists(config.ANNOUNCE_IMAGE):
         await message.answer_photo(
             FSInputFile(config.ANNOUNCE_IMAGE),
-            caption=texts.greeting_announce(),
+            caption=caption,
             reply_markup=kb.register_kb(),
         )
     else:
         await message.answer(
-            texts.greeting_announce(),
-            reply_markup=kb.register_kb(),
-            disable_web_page_preview=True,
+            caption, reply_markup=kb.register_kb(), disable_web_page_preview=True,
         )
 
 

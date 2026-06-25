@@ -282,6 +282,28 @@ async def cmd_refund(message: Message) -> None:
     await message.answer(texts.refund_done(reg))
 
 
+# ---------- /set_announce (запомнить афишу) ----------
+
+@router.message(Command("set_announce"))
+async def cmd_set_announce(message: Message) -> None:
+    """Запомнить картинку-афишу: ответь этой командой на фото."""
+    reply = message.reply_to_message
+    if not (reply and reply.photo):
+        await message.answer(
+            "📷 Пришли фото-афишу в группу и <b>ответь</b> на неё командой "
+            "<code>/set_announce</code> – я запомню её для анонса.\n\n"
+            "Проверить: /start в личке боту. Разослать всем: /announce"
+        )
+        return
+    file_id = reply.photo[-1].file_id
+    await db.set_meta("announce_file_id", file_id)
+    await message.answer(
+        "✅ Афиша сохранена.\n"
+        "Проверь её: открой бота в личке и нажми /start.\n"
+        "Разослать всем: /announce"
+    )
+
+
 # ---------- /announce (рассылка анонса всем) ----------
 
 @router.message(Command("announce"))
@@ -306,10 +328,13 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     await call.answer("Рассылаю…")
     uids = await db.list_all_user_ids()
     caption = texts.greeting_announce()
-    has_img = os.path.exists(config.ANNOUNCE_IMAGE)
+    file_id = await db.get_meta("announce_file_id")
+    has_disk = os.path.exists(config.ANNOUNCE_IMAGE)
 
     async def send_one(b: Bot, uid: int) -> None:
-        if has_img:
+        if file_id:
+            await b.send_photo(uid, file_id, caption=caption)
+        elif has_disk:
             await b.send_photo(uid, FSInputFile(config.ANNOUNCE_IMAGE), caption=caption)
         else:
             await b.send_message(uid, caption, disable_web_page_preview=True)
