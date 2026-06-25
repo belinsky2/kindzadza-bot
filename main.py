@@ -38,9 +38,6 @@ async def _set_commands(bot: Bot) -> None:
                 BotCommand(command="guests", description="Список всех гостей"),
                 BotCommand(command="announce", description="Разослать анонс всем"),
                 BotCommand(command="broadcast", description="Рассылка по сегментам"),
-                BotCommand(command="close", description="Закрыть бота для новых гостей"),
-                BotCommand(command="open", description="Открыть бота снова"),
-                BotCommand(command="reset_event", description="Сброс под новое мероприятие"),
             ],
             scope=BotCommandScopeChat(chat_id=config.ADMIN_GROUP_ID),
         )
