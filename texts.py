@@ -292,6 +292,16 @@ def refund_done(reg: dict) -> str:
     )
 
 
+def admin_card_free(reg: dict) -> str:
+    uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
+    return (
+        "🎟 <b>Новая регистрация</b> · Шоу за столом\n\n"
+        f"👤 {reg.get('name', '–')} ({uname})\n"
+        f"🪑 Мест: <b>{reg.get('qty', 1)}</b>\n"
+        f"🆔 <code>{reg['user_id']}</code>"
+    )
+
+
 def admin_card(reg: dict) -> str:
     m = config.PAYMENT_METHODS.get(reg["payment_method"], {})
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"

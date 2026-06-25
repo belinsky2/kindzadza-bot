@@ -188,6 +188,11 @@ async def _register_free(message: Message, state: FSMContext, user_id: int, qty:
     if config.BOT_USERNAME and reg.get("ticket_code"):
         qr = tickets.make_qr_png(tickets.ticket_link(reg["ticket_code"]))
         await message.answer_photo(qr, caption=texts.ticket_caption(reg))
+    if config.ADMIN_GROUP_ID:
+        try:
+            await message.bot.send_message(config.ADMIN_GROUP_ID, texts.admin_card_free(reg))
+        except Exception:
+            log.exception("Не удалось отправить карточку регистрации в админ-группу")
 
 
 async def _go_to_payment(message: Message, state: FSMContext, user_id: int, qty: int) -> None:
