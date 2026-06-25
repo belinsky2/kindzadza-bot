@@ -414,11 +414,23 @@ async def cmd_sync_sheets(message: Message) -> None:
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message) -> None:
-    taken = await db.seats_taken()
-    left = config.EVENT_CAPACITY - taken
     by_status = await db.count_by_status()
     ci_orders, ci_guests = await db.checkin_totals()
+    reg = by_status.get(db.STATUS_CONFIRMED_ONLINE, {"count": 0, "qty": 0})
+    new = by_status.get(db.STATUS_NEW, {"count": 0, "qty": 0})
 
+    if config.FREE_EVENT:
+        lines = [
+            "📊 <b>Статистика</b> · Шоу за столом",
+            f"✅ Зарегистрировано: <b>{reg['count']}</b> чел. · <b>{reg['qty']}</b> мест",
+            f"🚪 На входе отмечено: <b>{ci_guests}</b> гостей ({ci_orders} брони)",
+            f"👀 Просто зашли в бота: {new['count']}",
+        ]
+        await message.answer("\n".join(lines))
+        return
+
+    taken = await db.seats_taken()
+    left = config.EVENT_CAPACITY - taken
     lines = [
         "📊 <b>Статистика</b>",
         f"Мест занято (онлайн + бронь): <b>{taken}</b> / {config.EVENT_CAPACITY}",
@@ -442,12 +454,14 @@ async def cmd_stats(message: Message) -> None:
 
     # оценка выручки по подтверждённым онлайн
     rev = await db.breakdown_by_method(db.STATUS_CONFIRMED_ONLINE)
-    if rev:
+    rev_lines = [
+        f"• {config.format_amount(m, q)} ({q} билетов)"
+        for m, q in rev if m and m in config.PAYMENT_METHODS
+    ]
+    if rev_lines:
         lines.append("")
         lines.append("<b>Выручка (подтверждённые онлайн):</b>")
-        for method, qty in rev:
-            if method and method in config.PAYMENT_METHODS:
-                lines.append(f"• {config.format_amount(method, qty)} ({qty} билетов)")
+        lines.extend(rev_lines)
 
     await message.answer("\n".join(lines))
 

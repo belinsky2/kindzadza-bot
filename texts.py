@@ -464,9 +464,15 @@ def guests_list(regs: list[dict]) -> list[str]:
         return ["Гостей пока нет."]
     confirmed_qty = sum((r.get("qty") or 0) for r in regs if r["status"] == "confirmed_online")
     confirmed_cnt = sum(1 for r in regs if r["status"] == "confirmed_online")
-    header = (
-        f"📋 <b>Гости</b> · {confirmed_cnt} чел. оплатили · {confirmed_qty} билетов\n\n"
-    )
+    if config.FREE_EVENT:
+        header = (
+            f"📋 <b>Гости</b> · {confirmed_cnt} зарегистрировано · {confirmed_qty} мест\n\n"
+        )
+    else:
+        header = (
+            f"📋 <b>Гости</b> · {confirmed_cnt} чел. оплатили · {confirmed_qty} билетов\n\n"
+        )
+    unit = "мест" if config.FREE_EVENT else "бил."
     lines = []
     for r in regs:
         icon = _GUEST_ICONS.get(r["status"], "❓")
@@ -476,8 +482,11 @@ def guests_list(regs: list[dict]) -> list[str]:
         nums = r.get("raffle_numbers") or ""
         nums_str = f" · №{nums}" if nums else ""
         checkin = " ✔️" if r.get("checked_in_at") else ""
-        status_str = _STATUS_SHORT.get(r["status"], r["status"])
-        lines.append(f"{icon} {name}{uname} — {qty} бил. · {status_str}{nums_str}{checkin}")
+        if config.FREE_EVENT and r["status"] == "confirmed_online":
+            status_str = "записан"
+        else:
+            status_str = _STATUS_SHORT.get(r["status"], r["status"])
+        lines.append(f"{icon} {name}{uname} — {qty} {unit} · {status_str}{nums_str}{checkin}")
     pages, current = [], header
     for line in lines:
         if len(current) + len(line) + 1 > 4000:
