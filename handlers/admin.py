@@ -32,6 +32,9 @@ router.callback_query.filter(F.message.chat.id == config.ADMIN_GROUP_ID)
 # Временное хранилище контента для /broadcast: {admin_user_id: payload}
 _pending_broadcast: dict[int, dict] = {}
 
+# Временное хранилище афиши для /announce: {admin_user_id: {"file_id": ...}}
+_pending_announce: dict[int, dict] = {}
+
 
 # ---------- Подтверждение / отклонение ----------
 
@@ -316,10 +319,25 @@ async def cmd_set_announce(message: Message) -> None:
 
 @router.message(Command("announce"))
 async def cmd_announce(message: Message) -> None:
-    """Разослать текущий анонс (фото + текст) всем пользователям бота."""
+    """Разослать анонс (фото + текст + кнопка регистрации) всем пользователям.
+
+    Фото берётся из сообщения, на которое ответили; иначе — сохранённая афиша
+    (/set_announce). Текст – из texts.announce_broadcast().
+    """
+    reply = message.reply_to_message
+    if reply and reply.photo:
+        file_id = reply.photo[-1].file_id
+    else:
+        file_id = await db.get_meta("announce_file_id")
+    _pending_announce[message.from_user.id] = {"file_id": file_id or ""}
+
     total = len(await db.list_all_user_ids())
+    note = "" if file_id else (
+        "\n\n⚠️ Фото не найдено – уйдёт только текст.\n"
+        "Ответь этой командой на фото в группе или задай афишу через /set_announce."
+    )
     await message.answer(
-        texts.announce_admin_preview(total),
+        texts.announce_admin_preview(total) + note,
         reply_markup=kb.announce_confirm_kb(),
         disable_web_page_preview=True,
     )
@@ -329,24 +347,25 @@ async def cmd_announce(message: Message) -> None:
 async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     action = call.data.split(":", 1)[1]
     if action == "cancel":
+        _pending_announce.pop(call.from_user.id, None)
         await call.answer("Отменено")
         await call.message.edit_reply_markup(reply_markup=None)
         return
 
+    payload = _pending_announce.pop(call.from_user.id, None) or {}
+    file_id = payload.get("file_id") or await db.get_meta("announce_file_id")
     await call.answer("Рассылаю…")
     uids = await db.list_all_user_ids()
-    caption = texts.greeting_announce()
-    file_id = await db.get_meta("announce_file_id")
-    has_disk = os.path.exists(config.ANNOUNCE_IMAGE)
+    text = texts.announce_broadcast()
 
     async def send_one(b: Bot, uid: int) -> None:
-        markup = kb.register_kb()
+        # Текст длиннее лимита подписи (1024), поэтому фото и текст – двумя
+        # сообщениями. Кнопка регистрации идёт с текстом.
         if file_id:
-            await b.send_photo(uid, file_id, caption=caption, reply_markup=markup)
-        elif has_disk:
-            await b.send_photo(uid, FSInputFile(config.ANNOUNCE_IMAGE), caption=caption, reply_markup=markup)
-        else:
-            await b.send_message(uid, caption, reply_markup=markup, disable_web_page_preview=True)
+            await b.send_photo(uid, file_id)
+        await b.send_message(
+            uid, text, reply_markup=kb.register_kb(), disable_web_page_preview=True
+        )
 
     import broadcast as bc_mod
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
