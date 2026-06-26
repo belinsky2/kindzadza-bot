@@ -355,7 +355,14 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     payload = _pending_announce.pop(call.from_user.id, None) or {}
     file_id = payload.get("file_id") or await db.get_meta("announce_file_id")
     await call.answer("Рассылаю…")
-    uids = await db.list_all_user_ids()
+
+    if action == "paid":
+        uids = await segments.user_ids_paid()
+    elif action == "unpaid":
+        uids = await segments.user_ids_not_paid()
+    else:  # all
+        uids = await db.list_all_user_ids()
+
     text = texts.announce_broadcast()
 
     async def send_one(b: Bot, uid: int) -> None:
@@ -369,8 +376,13 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     import broadcast as bc_mod
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
     await call.message.edit_reply_markup(reply_markup=None)
+    seg_label = {
+        "paid": "забронировали" if config.FREE_EVENT else "купили онлайн",
+        "unpaid": "не забронировали" if config.FREE_EVENT else "не купили",
+        "all": "все",
+    }.get(action, action)
     await call.message.answer(
-        f"📣 Анонс разослан: отправлено {sent}, ошибок {failed}."
+        f"📣 Анонс разослан ({seg_label}): отправлено {sent}, ошибок {failed}."
     )
 
 

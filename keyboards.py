@@ -143,10 +143,19 @@ def kitchen_send_kb(user_id: int) -> InlineKeyboardMarkup:
 
 
 def announce_confirm_kb() -> InlineKeyboardMarkup:
+    """Выбор сегмента для рассылки анонса."""
+    if config.FREE_EVENT:
+        paid_label = "✅ Забронировали"
+        unpaid_label = "❌ Не забронировали"
+    else:
+        paid_label = "✅ Купили онлайн"
+        unpaid_label = "❌ Не купили"
     kb = InlineKeyboardBuilder()
-    kb.button(text="📣 Разослать анонс всем", callback_data="ann:send")
+    kb.button(text=unpaid_label, callback_data="ann:unpaid")
+    kb.button(text=paid_label, callback_data="ann:paid")
+    kb.button(text="📣 Всем", callback_data="ann:all")
     kb.button(text="Отмена", callback_data="ann:cancel")
-    kb.adjust(1)
+    kb.adjust(2, 2)
     return kb.as_markup()
 
 
