@@ -359,13 +359,12 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     text = texts.announce_broadcast()
 
     async def send_one(b: Bot, uid: int) -> None:
-        # Текст длиннее лимита подписи (1024), поэтому фото и текст – двумя
-        # сообщениями. Кнопка регистрации идёт с текстом.
         if file_id:
-            await b.send_photo(uid, file_id)
-        await b.send_message(
-            uid, text, reply_markup=kb.register_kb(), disable_web_page_preview=True
-        )
+            await b.send_photo(uid, file_id, caption=text, reply_markup=kb.register_kb())
+        else:
+            await b.send_message(
+                uid, text, reply_markup=kb.register_kb(), disable_web_page_preview=True
+            )
 
     import broadcast as bc_mod
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
