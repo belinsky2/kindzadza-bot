@@ -45,19 +45,21 @@ ADMIN_IDS: set[int] = {
 # --- Google Sheets (опционально; без креды — no-op) ---
 GOOGLE_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json").strip()
 SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "").strip()
-# Префикс имён листов: "27.06" → «27.06 Все гости» / «27.06 Зарегистрированные»
-SHEET_TAG: str = os.getenv("SHEET_TAG", "").strip()
+# Префикс имён листов Google Sheets. Задаётся под текущее событие прямо здесь
+# (не из .env), чтобы менять мероприятие правкой кода, а не конфига на сервере.
+SHEET_TAG: str = "04.07"
 
 # --- Время / таймзона ---
 TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 TZ = ZoneInfo(TZ_NAME)
 
 # --- Мероприятие ---
-EVENT_DATE: str = os.getenv("EVENT_DATE", "4 июля").strip()
-EVENT_TIME: str = os.getenv("EVENT_TIME", "19:00").strip()
-DOORS_TIME: str = os.getenv("DOORS_TIME", "18:45").strip()
-EVENT_LOCATION: str = os.getenv("EVENT_LOCATION", "Ресторан «Кинзадза», Нячанг").strip()
-EVENT_MAP_URL: str = os.getenv("EVENT_MAP_URL", "https://maps.app.goo.gl/qzGxjKLiGM8aWwcC8").strip()
+# Задаётся под текущее событие прямо здесь (не из .env): «Хинкали и Вино», 4 июля.
+EVENT_DATE: str = "4 июля"
+EVENT_TIME: str = "19:00"
+DOORS_TIME: str = "18:45"
+EVENT_LOCATION: str = "Ресторан «Кинзадза», Нячанг"
+EVENT_MAP_URL: str = "https://maps.app.goo.gl/qzGxjKLiGM8aWwcC8"
 
 # --- Лимит мест и дефицит ---
 EVENT_CAPACITY: int = _int("EVENT_CAPACITY", 60)
@@ -65,7 +67,8 @@ SEATS_REVEAL_THRESHOLD: int = _int("SEATS_REVEAL_THRESHOLD", 15)
 MAX_TICKETS_PER_ORDER: int = _int("MAX_TICKETS_PER_ORDER", 10)
 
 # --- Режим бесплатного входа (регистрация без оплаты, только бронь места) ---
-FREE_EVENT: bool = _bool("FREE_EVENT", False)
+# Задаётся прямо здесь (не из .env). «Хинкали и Вино» — платное событие → False.
+FREE_EVENT: bool = False
 
 # --- Рассылка / посты ---
 DAILY_POST_TIME: str = os.getenv("DAILY_POST_TIME", "10:00").strip()  # HH:MM по TZ
