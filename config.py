@@ -53,11 +53,11 @@ TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 TZ = ZoneInfo(TZ_NAME)
 
 # --- Мероприятие ---
-EVENT_DATE: str = os.getenv("EVENT_DATE", "13 июня").strip()
-EVENT_TIME: str = os.getenv("EVENT_TIME", "20:00").strip()
-DOORS_TIME: str = os.getenv("DOORS_TIME", "19:30").strip()
-EVENT_LOCATION: str = os.getenv("EVENT_LOCATION", "(локация уточняется)").strip()
-EVENT_MAP_URL: str = os.getenv("EVENT_MAP_URL", "").strip()
+EVENT_DATE: str = os.getenv("EVENT_DATE", "4 июля").strip()
+EVENT_TIME: str = os.getenv("EVENT_TIME", "19:00").strip()
+DOORS_TIME: str = os.getenv("DOORS_TIME", "18:45").strip()
+EVENT_LOCATION: str = os.getenv("EVENT_LOCATION", "Ресторан «Кинзадза», Нячанг").strip()
+EVENT_MAP_URL: str = os.getenv("EVENT_MAP_URL", "https://maps.app.goo.gl/qzGxjKLiGM8aWwcC8").strip()
 
 # --- Лимит мест и дефицит ---
 EVENT_CAPACITY: int = _int("EVENT_CAPACITY", 60)
@@ -89,12 +89,10 @@ REQUISITES = {
 }
 USDT_NETWORK: str = os.getenv("USDT_NETWORK", "TRC20").strip()
 
-# --- Способы оплаты: цена за один билет ---
+# --- Способы оплаты: депозит за одного человека ---
 PAYMENT_METHODS = {
-    "vnd": {"label": "🇻🇳 Донги", "unit": 200_000, "cur": "₫", "online": True},
-    "rub": {"label": "🇷🇺 Рубли", "unit": 650, "cur": "₽", "online": True},
-    "usdt": {"label": "🪙 Крипта (USDT)", "unit": 8, "cur": "USDT", "online": True},
-    "door": {"label": "📍 Оплата на месте", "unit": 300_000, "cur": "₫", "online": False},
+    "vnd": {"label": "🇻🇳 Онлайн по QR (донги)", "unit": 500_000, "cur": "₫", "online": True},
+    "door": {"label": "📍 Оплата на месте", "unit": 500_000, "cur": "₫", "online": False},
 }
 
 ONLINE_METHODS = [k for k, v in PAYMENT_METHODS.items() if v["online"]]

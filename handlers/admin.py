@@ -363,17 +363,13 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
     else:  # all
         uids = await db.list_all_user_ids()
 
+    import broadcast as bc_mod
     text = texts.announce_broadcast()
+    photo = file_id or None
 
     async def send_one(b: Bot, uid: int) -> None:
-        if file_id:
-            await b.send_photo(uid, file_id, caption=text, reply_markup=kb.register_kb())
-        else:
-            await b.send_message(
-                uid, text, reply_markup=kb.register_kb(), disable_web_page_preview=True
-            )
+        await bc_mod.send_announce(b, uid, text, photo, kb.register_kb())
 
-    import broadcast as bc_mod
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
     await call.message.edit_reply_markup(reply_markup=None)
     seg_label = {

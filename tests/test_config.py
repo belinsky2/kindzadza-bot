@@ -11,42 +11,22 @@ import config
 
 def test_format_amount_vnd_single():
     result = config.format_amount("vnd", 1)
-    assert result == "200 000 ₫"
+    assert result == "500 000 ₫"
 
 
 def test_format_amount_vnd_multiple():
     result = config.format_amount("vnd", 3)
-    assert result == "600 000 ₫"
-
-
-def test_format_amount_rub_single():
-    result = config.format_amount("rub", 1)
-    assert result == "650 ₽"
-
-
-def test_format_amount_rub_multiple():
-    result = config.format_amount("rub", 5)
-    assert result == "3 250 ₽"
-
-
-def test_format_amount_usdt_single():
-    result = config.format_amount("usdt", 1)
-    assert result == "8 USDT"
-
-
-def test_format_amount_usdt_multiple():
-    result = config.format_amount("usdt", 4)
-    assert result == "32 USDT"
+    assert result == "1 500 000 ₫"
 
 
 def test_format_amount_door_single():
     result = config.format_amount("door", 1)
-    assert result == "300 000 ₫"
+    assert result == "500 000 ₫"
 
 
 def test_format_amount_door_multiple():
     result = config.format_amount("door", 2)
-    assert result == "600 000 ₫"
+    assert result == "1 000 000 ₫"
 
 
 def test_format_amount_uses_spaces_not_commas():
@@ -54,12 +34,6 @@ def test_format_amount_uses_spaces_not_commas():
     result = config.format_amount("vnd", 1)
     assert "," not in result
     assert " " in result
-
-
-def test_format_amount_usdt_no_trailing_zeros():
-    """USDT показывает целое число без .0."""
-    result = config.format_amount("usdt", 1)
-    assert ".0" not in result
 
 
 def test_format_amount_all_methods_non_empty():
@@ -119,8 +93,8 @@ def test_payment_methods_have_required_keys():
         assert required.issubset(set(method.keys())), f"Метод {key} неполный"
 
 
-def test_online_methods_are_vnd_rub_usdt():
-    assert set(config.ONLINE_METHODS) == {"vnd", "rub", "usdt"}
+def test_online_methods_are_vnd():
+    assert set(config.ONLINE_METHODS) == {"vnd"}
 
 
 def test_door_is_not_online():

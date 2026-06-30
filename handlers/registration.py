@@ -11,6 +11,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
+import broadcast
 import config
 import db
 import keyboards as kb
@@ -88,19 +89,14 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
     caption = texts.greeting_announce()
     announce_file_id = await db.get_meta("announce_file_id")
     if announce_file_id:
-        await message.answer_photo(
-            announce_file_id, caption=caption, reply_markup=kb.register_kb(),
-        )
+        photo = announce_file_id
     elif os.path.exists(config.ANNOUNCE_IMAGE):
-        await message.answer_photo(
-            FSInputFile(config.ANNOUNCE_IMAGE),
-            caption=caption,
-            reply_markup=kb.register_kb(),
-        )
+        photo = FSInputFile(config.ANNOUNCE_IMAGE)
     else:
-        await message.answer(
-            caption, reply_markup=kb.register_kb(), disable_web_page_preview=True,
-        )
+        photo = None
+    await broadcast.send_announce(
+        bot, message.chat.id, caption, photo, kb.register_kb()
+    )
 
 
 @router.message(Command("status"))
