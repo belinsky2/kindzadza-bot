@@ -25,6 +25,12 @@ from handlers import checkin
 log = logging.getLogger(__name__)
 router = Router()
 
+# Пользовательская воронка (анонс, регистрация, оплата) работает только в личке
+# с ботом. В группах – включая орг-группу – эти хендлеры не срабатывают, чтобы
+# не дублировать функционал бота и не плодить мусорные регистрации.
+router.message.filter(F.chat.type == "private")
+router.callback_query.filter(F.message.chat.type == "private")
+
 
 class Form(StatesGroup):
     waiting_name = State()
