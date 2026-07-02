@@ -507,6 +507,24 @@ async def test_pay_door_calculates_amount_correctly(fresh_db):
     assert reg["amount"] == "1 000 000 ₫"
 
 
+async def test_pay_door_notifies_admin_group(fresh_db, monkeypatch):
+    """Бронь «оплата на месте» уходит карточкой в админ-группу."""
+    monkeypatch.setattr(config, "ADMIN_GROUP_ID", -100999)
+    uid = 506
+    await db.ensure_user(uid, "user506")
+    await db.set_name(uid, "Door Guest")
+    call = make_callback(data="pay:door", user_id=uid)
+    state = make_state(data={"qty": 3})
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_pay(call, state)
+
+    call.message.bot.send_message.assert_awaited_once()
+    args, kwargs = call.message.bot.send_message.call_args
+    assert args[0] == -100999
+    assert "оплата на месте" in args[1].lower()
+
+
 # ==================== on_screenshot ====================
 
 async def test_screenshot_photo_updates_status(fresh_db):

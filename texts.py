@@ -331,6 +331,19 @@ def admin_card_free(reg: dict) -> str:
     )
 
 
+def admin_card_door(reg: dict) -> str:
+    """Уведомление в админ-группу о брони с оплатой на месте (без подтверждения)."""
+    uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
+    return (
+        "📍 <b>Новая бронь · оплата на месте</b>\n\n"
+        f"👤 {reg.get('name', '–')} ({uname})\n"
+        f"🎟 Мест: <b>{reg.get('qty', 1)}</b>\n"
+        f"💰 Депозит на месте: <b>{reg.get('amount', '–')}</b>\n"
+        f"🆔 <code>{reg['user_id']}</code>\n\n"
+        "⚠️ Место не гарантировано – онлайн-оплату гость не делал."
+    )
+
+
 def admin_card(reg: dict) -> str:
     m = config.PAYMENT_METHODS.get(reg["payment_method"], {})
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"

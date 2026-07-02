@@ -225,6 +225,13 @@ async def on_pay(call: CallbackQuery, state: FSMContext) -> None:
         await sheets.sync_registration(reg)
         await state.clear()
         await call.message.answer(texts.door_registered(qty), reply_markup=kb.door_kb())
+        if config.ADMIN_GROUP_ID:
+            try:
+                await call.message.bot.send_message(
+                    config.ADMIN_GROUP_ID, texts.admin_card_door(reg)
+                )
+            except Exception:
+                log.exception("Не удалось отправить бронь (на месте) в админ-группу")
         return
 
     # онлайн-способ: проверяем места ещё раз (на случай гонки)
