@@ -319,22 +319,25 @@ async def cmd_set_announce(message: Message) -> None:
 
 @router.message(Command("announce"))
 async def cmd_announce(message: Message) -> None:
-    """Разослать анонс (фото + текст + кнопка регистрации) всем пользователям.
+    """Разослать анонс всем пользователям + кнопка регистрации.
 
-    Фото берётся из сообщения, на которое ответили; иначе — сохранённая афиша
-    (/set_announce). Текст – из texts.announce_broadcast().
+    Рассылается ТОЧНАЯ копия сообщения, на которое ответили (фото, текст,
+    ссылки, форматирование) — через copy_message. Если ответа нет — уйдёт
+    стандартный анонс из бота (texts.announce_broadcast + сохранённая афиша).
     """
     reply = message.reply_to_message
-    if reply and reply.photo:
-        file_id = reply.photo[-1].file_id
+    if reply:
+        _pending_announce[message.from_user.id] = {
+            "from_chat_id": message.chat.id,
+            "message_id": reply.message_id,
+        }
     else:
-        file_id = await db.get_meta("announce_file_id")
-    _pending_announce[message.from_user.id] = {"file_id": file_id or ""}
+        _pending_announce[message.from_user.id] = {}
 
     total = len(await db.list_all_user_ids())
-    note = "" if file_id else (
-        "\n\n⚠️ Фото не найдено – уйдёт только текст.\n"
-        "Ответь этой командой на фото в группе или задай афишу через /set_announce."
+    note = "" if reply else (
+        "\n\n⚠️ Ты не ответил на сообщение – уйдёт стандартный анонс из бота.\n"
+        "Чтобы разослать именно твой пост, <b>ответь</b> этой командой на сообщение с анонсом."
     )
     await message.answer(
         texts.announce_admin_preview(total) + note,
@@ -353,7 +356,8 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
         return
 
     payload = _pending_announce.pop(call.from_user.id, None) or {}
-    file_id = payload.get("file_id") or await db.get_meta("announce_file_id")
+    from_chat_id = payload.get("from_chat_id")
+    message_id = payload.get("message_id")
     await call.answer("Рассылаю…")
 
     if action == "me":
@@ -366,11 +370,19 @@ async def on_announce(call: CallbackQuery, bot: Bot) -> None:
         uids = await db.list_all_user_ids()
 
     import broadcast as bc_mod
-    text = texts.announce_broadcast()
-    photo = file_id or None
+    if from_chat_id and message_id:
+        # Копируем ровно тот пост, на который ответил админ, + кнопка регистрации
+        async def send_one(b: Bot, uid: int) -> None:
+            await b.copy_message(
+                uid, from_chat_id, message_id, reply_markup=kb.register_kb()
+            )
+    else:
+        # Запасной вариант: стандартный анонс из кода + сохранённая афиша
+        text = texts.announce_broadcast()
+        photo = (await db.get_meta("announce_file_id")) or None
 
-    async def send_one(b: Bot, uid: int) -> None:
-        await bc_mod.send_announce(b, uid, text, photo, kb.register_kb())
+        async def send_one(b: Bot, uid: int) -> None:
+            await bc_mod.send_announce(b, uid, text, photo, kb.register_kb())
 
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
     await call.message.edit_reply_markup(reply_markup=None)
