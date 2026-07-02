@@ -151,11 +151,12 @@ def announce_confirm_kb() -> InlineKeyboardMarkup:
         paid_label = "✅ Купили онлайн"
         unpaid_label = "❌ Не купили"
     kb = InlineKeyboardBuilder()
+    kb.button(text="🧪 Только мне (тест)", callback_data="ann:me")
     kb.button(text=unpaid_label, callback_data="ann:unpaid")
     kb.button(text=paid_label, callback_data="ann:paid")
     kb.button(text="📣 Всем", callback_data="ann:all")
     kb.button(text="Отмена", callback_data="ann:cancel")
-    kb.adjust(2, 2)
+    kb.adjust(1, 2, 1, 1)
     return kb.as_markup()
 
 
