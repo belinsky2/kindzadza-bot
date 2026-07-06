@@ -75,9 +75,9 @@ DAILY_POST_TIME: str = os.getenv("DAILY_POST_TIME", "10:00").strip()  # HH:MM п
 CONFIRM_SLA: str = os.getenv("CONFIRM_SLA", "пары часов").strip()
 BROADCAST_RATE: int = _int("BROADCAST_RATE", 25)  # сообщений в секунду (лимит Telegram ~30)
 
-# --- Напоминания (cron: дата+время по TZ) ---
-REMINDER_EVE: str = os.getenv("REMINDER_EVE", "2026-06-12 20:00").strip()
-REMINDER_DAY: str = os.getenv("REMINDER_DAY", "2026-06-13 12:00").strip()
+# --- Напоминания (дата+время по TZ). Задаются под событие здесь, не из .env. ---
+REMINDER_EVE: str = "2026-07-10 20:00"  # вечер накануне
+REMINDER_DAY: str = "2026-07-11 12:00"  # днём в день концерта
 
 # --- Ссылки ---
 TG_LINK: str = os.getenv("TG_LINK", "").strip()
