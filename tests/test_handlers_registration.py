@@ -42,7 +42,7 @@ async def test_start_new_user_no_image(fresh_db):
     state.clear.assert_awaited_once()
     bot.send_message.assert_awaited_once()
     call_text = bot.send_message.call_args[0][1]
-    assert "хинкали" in call_text.lower()
+    assert "Привет" in call_text
 
 
 async def test_start_new_user_with_image(fresh_db):
@@ -56,9 +56,8 @@ async def test_start_new_user_with_image(fresh_db):
          patch("handlers.registration.FSInputFile", return_value=MagicMock()):
         await cmd_start(msg, state, cmd, bot)
 
-    # Текст длиннее лимита подписи → фото и текст двумя сообщениями
+    # Приветствие короткое (≤1024) → фото с подписью одним сообщением
     bot.send_photo.assert_awaited_once()
-    bot.send_message.assert_awaited_once()
 
 
 async def test_start_returning_awaiting_payment(fresh_db):
@@ -242,7 +241,7 @@ async def test_reset_then_start_shows_greeting(fresh_db):
         await cmd_start(msg, make_state(), cmd, bot)
 
     text = bot.send_message.call_args[0][1]
-    assert "хинкали" in text.lower()  # приветствие, не статус
+    assert "Привет" in text  # приветствие, не статус
 
 
 # ==================== on_register ====================
@@ -463,20 +462,35 @@ async def test_pay_vnd_online_available(fresh_db):
     state.set_state.assert_awaited_once_with(Form.waiting_screenshot)
 
 
-async def test_pay_vnd_amount_multiple(fresh_db):
+async def test_pay_rub_online_available(fresh_db):
     uid = 502
     await db.ensure_user(uid, "user502")
-    await db.set_name(uid, "VND User")
+    await db.set_name(uid, "RUB User")
 
-    call = make_callback(data="pay:vnd", user_id=uid)
+    call = make_callback(data="pay:rub", user_id=uid)
     state = make_state(data={"qty": 2})
 
     with patch("segments.is_sold_out", new=AsyncMock(return_value=False)):
         await on_pay(call, state)
 
     reg = await db.get_registration(uid)
-    assert reg["payment_method"] == "vnd"
-    assert reg["amount"] == "1 000 000 ₫"
+    assert reg["payment_method"] == "rub"
+    assert reg["amount"] == "1 300 ₽"
+
+
+async def test_pay_usdt_online_available(fresh_db):
+    uid = 503
+    await db.ensure_user(uid, "user503")
+    await db.set_name(uid, "USDT User")
+
+    call = make_callback(data="pay:usdt", user_id=uid)
+    state = make_state(data={"qty": 1})
+
+    with patch("segments.is_sold_out", new=AsyncMock(return_value=False)):
+        await on_pay(call, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["payment_method"] == "usdt"
 
 
 async def test_pay_online_sold_out_shows_message(fresh_db):
@@ -504,7 +518,7 @@ async def test_pay_door_calculates_amount_correctly(fresh_db):
         await on_pay(call, state)
 
     reg = await db.get_registration(uid)
-    assert reg["amount"] == "1 000 000 ₫"
+    assert reg["amount"] == "600 000 ₫"
 
 
 async def test_pay_door_notifies_admin_group(fresh_db, monkeypatch):

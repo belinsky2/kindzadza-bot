@@ -47,17 +47,17 @@ GOOGLE_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials
 SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "").strip()
 # Префикс имён листов Google Sheets. Задаётся под текущее событие прямо здесь
 # (не из .env), чтобы менять мероприятие правкой кода, а не конфига на сервере.
-SHEET_TAG: str = "04.07"
+SHEET_TAG: str = "11.07"
 
 # --- Время / таймзона ---
 TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 TZ = ZoneInfo(TZ_NAME)
 
 # --- Мероприятие ---
-# Задаётся под текущее событие прямо здесь (не из .env): «Хинкали и Вино», 4 июля.
-EVENT_DATE: str = "4 июля"
-EVENT_TIME: str = "19:00"
-DOORS_TIME: str = "18:45"
+# Задаётся под текущее событие прямо здесь (не из .env): «Стендап за ужином», 11 июля.
+EVENT_DATE: str = "11 июля"
+EVENT_TIME: str = "20:00"
+DOORS_TIME: str = "19:30"
 EVENT_LOCATION: str = "Ресторан «Кинзадза», Нячанг"
 EVENT_MAP_URL: str = "https://maps.app.goo.gl/qzGxjKLiGM8aWwcC8"
 
@@ -92,10 +92,12 @@ REQUISITES = {
 }
 USDT_NETWORK: str = os.getenv("USDT_NETWORK", "TRC20").strip()
 
-# --- Способы оплаты: депозит за одного человека ---
+# --- Способы оплаты: цена за один билет ---
 PAYMENT_METHODS = {
-    "vnd": {"label": "🇻🇳 Онлайн по QR (донги)", "unit": 500_000, "cur": "₫", "online": True},
-    "door": {"label": "📍 Оплата на месте", "unit": 500_000, "cur": "₫", "online": False},
+    "vnd": {"label": "🇻🇳 Донги", "unit": 200_000, "cur": "₫", "online": True},
+    "rub": {"label": "🇷🇺 Рубли", "unit": 650, "cur": "₽", "online": True},
+    "usdt": {"label": "🪙 Крипта (USDT)", "unit": 8, "cur": "USDT", "online": True},
+    "door": {"label": "📍 Оплата на месте", "unit": 300_000, "cur": "₫", "online": False},
 }
 
 ONLINE_METHODS = [k for k, v in PAYMENT_METHODS.items() if v["online"]]
