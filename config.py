@@ -57,7 +57,7 @@ TZ = ZoneInfo(TZ_NAME)
 # Задаётся под текущее событие прямо здесь (не из .env): «Стендап за ужином», 11 июля.
 EVENT_DATE: str = "11 июля"
 EVENT_TIME: str = "20:00"
-DOORS_TIME: str = "19:30"
+DOORS_TIME: str = "19:00"
 EVENT_LOCATION: str = "Ресторан «Кинзадза», Нячанг"
 EVENT_MAP_URL: str = "https://maps.app.goo.gl/qzGxjKLiGM8aWwcC8"
 
