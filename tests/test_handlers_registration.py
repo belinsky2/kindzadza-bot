@@ -500,6 +500,43 @@ async def test_pay_rub_online_available(fresh_db):
     assert reg["amount"] == "1 300 ₽"
 
 
+async def test_switch_method_while_waiting_screenshot(fresh_db):
+    """Гость выбрал донги (ждём скрин) и меняет способ на рубли старой кнопкой."""
+    uid = 520
+    await db.ensure_user(uid, "switcher")
+    await db.set_name(uid, "Switcher")
+    # уже выбрал онлайн-донги, ждём скрин
+    await db.set_order(uid, 2, "vnd", "400 000 ₫", db.STATUS_AWAITING_PAYMENT)
+
+    call = make_callback(data="pay:rub", user_id=uid)
+    state = make_state(data={})  # состояние без qty — берём из брони
+
+    with patch("segments.is_sold_out", new=AsyncMock(return_value=False)):
+        await on_pay(call, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["payment_method"] == "rub"
+    assert reg["amount"] == "1 300 ₽"  # 2 × 650
+
+
+async def test_pay_blocked_after_confirmation(fresh_db):
+    """После отправки скрина (awaiting_confirmation) кнопки оплаты заблокированы."""
+    uid = 521
+    await db.ensure_user(uid, "paid")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_AWAITING_CONFIRMATION)
+
+    call = make_callback(data="pay:rub", user_id=uid)
+    state = make_state(data={})
+
+    await on_pay(call, state)
+
+    reg = await db.get_registration(uid)
+    # способ не изменился, показан alert
+    assert reg["payment_method"] == "vnd"
+    call.answer.assert_awaited()
+    assert call.answer.call_args.kwargs.get("show_alert") is True
+
+
 async def test_pay_usdt_online_available(fresh_db):
     uid = 503
     await db.ensure_user(uid, "user503")

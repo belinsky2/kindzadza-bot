@@ -224,13 +224,27 @@ async def _go_to_payment(message: Message, state: FSMContext, user_id: int, qty:
 
 # ---------- Выбор способа оплаты ----------
 
-@router.callback_query(Form.choosing_payment, F.data.startswith("pay:"))
+# Кнопки способа оплаты работают без привязки к состоянию FSM — чтобы гость
+# мог сменить способ (донги ↔ рубли ↔ на месте) старыми кнопками из чата, не
+# перезапуская /start. Блокируем только после отправки скрина/подтверждения.
+@router.callback_query(F.data.startswith("pay:"))
 async def on_pay(call: CallbackQuery, state: FSMContext) -> None:
+    user_id = call.from_user.id
+    reg = await db.get_registration(user_id)
+    if reg and reg.get("status") in (
+        db.STATUS_AWAITING_CONFIRMATION, db.STATUS_CONFIRMED_ONLINE,
+    ):
+        await call.answer(
+            "Оплата уже отправлена на проверку. Чтобы изменить – напиши организатору.",
+            show_alert=True,
+        )
+        return
     await call.answer()
     method = call.data.split(":", 1)[1]
+    if method not in config.PAYMENT_METHODS:
+        return
     data = await state.get_data()
-    qty = int(data.get("qty", 1))
-    user_id = call.from_user.id
+    qty = int(data.get("qty") or (reg.get("qty") if reg else None) or 1)
     amount = config.format_amount(method, qty)
 
     if method == "door":
