@@ -60,6 +60,28 @@ async def test_start_new_user_with_image(fresh_db):
     bot.send_photo.assert_awaited_once()
 
 
+async def test_start_copies_saved_announce_post(fresh_db):
+    """Если админ сохранил пост через /set_announce — /start копирует его целиком."""
+    await db.set_meta("announce_src_chat", "-100555")
+    await db.set_meta("announce_src_msg", "42")
+
+    msg = make_message(user_id=7, username="newbie")
+    state = make_state()
+    cmd = make_command(args="")
+    bot = make_bot()
+
+    await cmd_start(msg, state, cmd, bot)
+
+    bot.copy_message.assert_awaited_once()
+    args, kwargs = bot.copy_message.call_args
+    # копируем из сохранённого чата/сообщения в чат пользователя
+    assert args[1] == -100555
+    assert args[2] == 42
+    assert kwargs.get("reply_markup") is not None
+    # запасной текстовый анонс при этом не отправляется
+    bot.send_message.assert_not_awaited()
+
+
 async def test_start_returning_awaiting_payment(fresh_db):
     """Пользователь с awaiting_payment получает статус, а не анонс."""
     uid = 3

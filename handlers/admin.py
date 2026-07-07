@@ -293,25 +293,35 @@ async def cmd_refund(message: Message) -> None:
     await message.answer(texts.refund_done(reg))
 
 
-# ---------- /set_announce (запомнить афишу) ----------
+# ---------- /set_announce (запомнить пост для новых пользователей) ----------
 
 @router.message(Command("set_announce"))
 async def cmd_set_announce(message: Message) -> None:
-    """Запомнить картинку-афишу: ответь этой командой на фото."""
+    """Запомнить пост для новых пользователей ЦЕЛИКОМ (текст + картинка + ссылки).
+
+    Ответь этой командой на пост в группе — бот покажет его точную копию
+    на /start новым пользователям (через copy_message).
+    """
     reply = message.reply_to_message
-    if not (reply and reply.photo):
+    if not reply:
         await message.answer(
-            "📷 Пришли фото-афишу в группу и <b>ответь</b> на неё командой "
-            "<code>/set_announce</code> – я запомню её для анонса.\n\n"
-            "Проверить: /start в личке боту. Разослать всем: /announce"
+            "📷 Пришли пост-анонс (текст + картинка) в группу и <b>ответь</b> на него "
+            "командой <code>/set_announce</code> – я запомню его целиком.\n\n"
+            "Новые пользователи увидят этот пост при /start.\n"
+            "Проверить: /start в личке боту."
         )
         return
-    file_id = reply.photo[-1].file_id
-    await db.set_meta("announce_file_id", file_id)
+    # Сохраняем координаты сообщения — на /start копируем его как есть.
+    await db.set_meta("announce_src_chat", str(message.chat.id))
+    await db.set_meta("announce_src_msg", str(reply.message_id))
+    # Фото — для запасного варианта, если исходное сообщение вдруг удалят.
+    if reply.photo:
+        await db.set_meta("announce_file_id", reply.photo[-1].file_id)
     await message.answer(
-        "✅ Афиша сохранена.\n"
-        "Проверь её: открой бота в личке и нажми /start.\n"
-        "Разослать всем: /announce"
+        "✅ Пост сохранён целиком (текст + картинка).\n"
+        "Новые пользователи увидят его при /start.\n\n"
+        "Проверь: открой бота в личке и нажми /start.\n"
+        "⚠️ Не удаляй это сообщение в группе – бот копирует его новым гостям."
     )
 
 

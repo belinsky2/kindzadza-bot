@@ -92,6 +92,20 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         await message.answer(texts.greeting_sold_out(), disable_web_page_preview=True)
         return
 
+    # Если админ сохранил пост через /set_announce — показываем его точную копию.
+    src_chat = await db.get_meta("announce_src_chat")
+    src_msg = await db.get_meta("announce_src_msg")
+    if src_chat and src_msg:
+        try:
+            await bot.copy_message(
+                message.chat.id, int(src_chat), int(src_msg),
+                reply_markup=kb.register_kb(),
+            )
+            return
+        except Exception:
+            log.exception("Не удалось скопировать сохранённый анонс — показываю запасной текст")
+
+    # Запасной вариант: текст из кода + сохранённая/дисковая афиша.
     caption = texts.greeting_announce()
     announce_file_id = await db.get_meta("announce_file_id")
     if announce_file_id:
