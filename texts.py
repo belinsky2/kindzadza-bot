@@ -430,7 +430,22 @@ def checkin_all_arrived(reg: dict) -> str:
     )
 
 
-# ===================== НАПОМИНАНИЯ (по сегментам) =====================
+# ===================== НАПОМИНАНИЯ =====================
+
+def admin_reminder_nudge(when: str, paid: int, total_users: int) -> str:
+    """Пинг в админ-группу: пора вручную напомнить гостям (бот сам не рассылает)."""
+    return (
+        "🔔 <b>Напоминание оргам</b>\n\n"
+        f"{when.capitalize()} концерт «Стендап за ужином» – "
+        f"{config.EVENT_DATE}, начало {config.EVENT_TIME} (сбор {config.DOORS_TIME}).\n\n"
+        f"✅ Оплатили онлайн: <b>{paid}</b> · 👥 всего в боте: <b>{total_users}</b>\n\n"
+        "Пора напомнить гостям! Сделай рассылку вручную через /broadcast "
+        "(например, по сегменту «Не купили» – для дожима).\n\n"
+        f"{config.REMINDER_MENTION}, рассылка на тебе 🙌"
+    )
+
+
+# ----- Тексты рассылок по сегментам (для ручного /broadcast, если нужно) -----
 
 def reminder_paid(when: str) -> str:
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Карта</a>" if config.EVENT_MAP_URL else ""

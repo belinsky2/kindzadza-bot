@@ -52,26 +52,30 @@ async def publish_next_post(bot: Bot) -> dict | None:
     return {"post": post, "sent": sent, "failed": failed}
 
 
-# ---------- Напоминания ----------
-
-async def _send_segment(bot: Bot, segment: str, text: str) -> tuple[int, int]:
-    uids = await segments.user_ids_for_segment(segment)
-
-    async def send_one(b: Bot, uid: int) -> None:
-        await b.send_message(uid, text, disable_web_page_preview=True)
-
-    return await broadcast.broadcast(bot, uids, send_one)
-
+# ---------- Напоминания оргам ----------
+# Гостям бот сам ничего не шлёт. В заданное время он лишь пингует админ-группу
+# («пора напомнить гостям»), а рассылку орги делают вручную через /broadcast.
 
 async def send_reminder(bot: Bot, key: str, when_label: str) -> None:
-    if await db.is_broadcast_sent(key):
-        log.info("Напоминание %s уже отправлено — пропуск.", key)
+    if not config.ADMIN_GROUP_ID:
         return
-    await _send_segment(bot, segments.SEG_PAID, texts.reminder_paid(when_label))
-    await _send_segment(bot, segments.SEG_DOOR, texts.reminder_door(when_label))
-    await _send_segment(bot, segments.SEG_NOT_PAID, texts.reminder_not_paid(when_label))
+    if await db.is_broadcast_sent(key):
+        log.info("Напоминание оргам %s уже отправлено — пропуск.", key)
+        return
+    # немного статистики, чтобы оргам сразу был понятен объём рассылки
+    by_status = await db.count_by_status()
+    paid = by_status.get(db.STATUS_CONFIRMED_ONLINE, {"count": 0})["count"]
+    total_users = len(await db.list_all_user_ids())
+    try:
+        await bot.send_message(
+            config.ADMIN_GROUP_ID,
+            texts.admin_reminder_nudge(when_label, paid, total_users),
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        log.exception("Не удалось отправить напоминание оргам в админ-группу")
     await db.mark_broadcast_sent(key)
-    log.info("Напоминание %s отправлено.", key)
+    log.info("Напоминание оргам %s отправлено.", key)
 
 
 def _parse_dt(value: str) -> datetime | None:
