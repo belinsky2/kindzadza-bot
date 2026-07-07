@@ -42,7 +42,7 @@ async def test_start_new_user_no_image(fresh_db):
     state.clear.assert_awaited_once()
     bot.send_message.assert_awaited_once()
     call_text = bot.send_message.call_args[0][1]
-    assert "Привет" in call_text
+    assert "Стендап за ужином" in call_text
 
 
 async def test_start_new_user_with_image(fresh_db):
@@ -241,7 +241,7 @@ async def test_reset_then_start_shows_greeting(fresh_db):
         await cmd_start(msg, make_state(), cmd, bot)
 
     text = bot.send_message.call_args[0][1]
-    assert "Привет" in text  # приветствие, не статус
+    assert "Стендап за ужином" in text  # приветствие, не статус
 
 
 # ==================== on_register ====================
