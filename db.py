@@ -142,6 +142,17 @@ async def count_by_source() -> list[dict]:
     return [dict(r) for r in await cur.fetchall()]
 
 
+async def get_paid_by_source(source: str) -> list[dict]:
+    """Оплатившие онлайн (confirmed_online) с указанной меткой канала."""
+    cur = await _db.execute(
+        "SELECT * FROM registrations "
+        "WHERE status='confirmed_online' AND LOWER(source)=LOWER(?) "
+        "ORDER BY created_at",
+        (source,),
+    )
+    return [dict(r) for r in await cur.fetchall()]
+
+
 async def get_registration(user_id: int) -> Optional[dict]:
     cur = await _db.execute("SELECT * FROM registrations WHERE user_id=?", (user_id,))
     row = await cur.fetchone()

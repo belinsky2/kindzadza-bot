@@ -9,7 +9,7 @@ import os
 import random
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
 import config
@@ -531,6 +531,24 @@ async def cmd_stats(message: Message) -> None:
 async def cmd_sources(message: Message) -> None:
     rows = await db.count_by_source()
     await message.answer(texts.sources_report(rows), disable_web_page_preview=True)
+
+
+@router.message(Command("source_raffle"))
+async def cmd_source_raffle(message: Message, command: CommandObject) -> None:
+    """Розыгрыш: 1 случайный победитель среди оплативших онлайн по метке.
+
+    Использование: /source_raffle flyer
+    """
+    tag = (command.args or "").strip().split()[0].lower() if command.args else ""
+    if not tag:
+        await message.answer(texts.source_raffle_usage(), disable_web_page_preview=True)
+        return
+    candidates = await db.get_paid_by_source(tag)
+    if not candidates:
+        await message.answer(texts.source_raffle_empty(tag))
+        return
+    winner = random.choice(candidates)
+    await message.answer(texts.source_raffle_result(winner, tag, len(candidates)))
 
 
 # ---------- Посты ----------

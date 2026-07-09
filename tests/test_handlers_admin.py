@@ -14,10 +14,50 @@ from handlers.admin import (
     cmd_addpost,
     cmd_broadcast,
     cmd_refund,
+    cmd_source_raffle,
     on_broadcast_segment,
     _pending_broadcast,
 )
-from tests.conftest import make_message, make_callback, make_bot
+from tests.conftest import make_message, make_callback, make_bot, make_command
+
+
+# ==================== cmd_source_raffle ====================
+
+async def test_source_raffle_picks_winner_from_channel(fresh_db):
+    """Победитель — только из оплативших онлайн с нужной меткой."""
+    # 3 оплативших по flyer
+    for i in range(3):
+        uid = 8100 + i
+        await db.ensure_user(uid, f"f{i}")
+        await db.set_name(uid, f"Flyer {i}")
+        await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+        await db.set_source_if_empty(uid, "flyer")
+    # оплативший по insta — не должен попасть
+    await db.ensure_user(8200, "insta1")
+    await db.set_order(8200, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_source_if_empty(8200, "insta")
+    # по flyer, но НЕ оплатил — тоже мимо
+    await db.ensure_user(8300, "flyernopay")
+    await db.set_source_if_empty(8300, "flyer")
+
+    msg = make_message(user_id=1)
+    await cmd_source_raffle(msg, make_command(args="flyer"))
+
+    text = msg.answer.call_args[0][0]
+    assert "Победитель" in text and "flyer" in text
+    assert "среди <b>3</b>" in text  # пул = 3 оплативших по flyer
+
+
+async def test_source_raffle_empty_channel(fresh_db):
+    msg = make_message(user_id=1)
+    await cmd_source_raffle(msg, make_command(args="flyer"))
+    assert "нет оплативших" in msg.answer.call_args[0][0]
+
+
+async def test_source_raffle_no_arg_shows_usage(fresh_db):
+    msg = make_message(user_id=1)
+    await cmd_source_raffle(msg, make_command(args=""))
+    assert "Укажи метку" in msg.answer.call_args[0][0]
 
 
 # ==================== cmd_raffle / on_raffle ====================

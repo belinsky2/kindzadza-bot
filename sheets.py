@@ -36,7 +36,7 @@ HEADER_ALL_PAID = [
 
 HEADER_PAID = [
     "user_id", "Имя", "Ник", "Кол-во билетов", "Способ",
-    "Сумма", "Номера розыгрыша", "Заказ еды", "Пришло", "Создано",
+    "Сумма", "Источник", "Номера розыгрыша", "Заказ еды", "Пришло", "Создано",
 ]
 
 # --- Бесплатное событие (без колонок оплаты) ---
@@ -192,6 +192,7 @@ def _row_paid(reg: dict) -> list:
         reg.get("qty") or "",
         method,
         reg.get("amount") or "",
+        reg.get("source") or "",
         reg.get("raffle_numbers") or "",
         reg.get("food_order") or "",
         _arrived_str(reg),

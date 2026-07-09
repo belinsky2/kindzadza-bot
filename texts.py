@@ -302,12 +302,19 @@ def refund_done(reg: dict) -> str:
     )
 
 
+def _source_line(reg: dict) -> str:
+    """Строка канала привлечения для карточек оргам ('' если метки нет)."""
+    src = reg.get("source")
+    return f"🔗 Источник: <b>{src}</b>\n" if src else ""
+
+
 def admin_card_free(reg: dict) -> str:
     uname = f"@{reg['username']}" if reg.get("username") else "(нет ника)"
     return (
         "🎟 <b>Новая регистрация</b> · Шоу за столом\n\n"
         f"👤 {reg.get('name', '–')} ({uname})\n"
         f"🪑 Мест: <b>{reg.get('qty', 1)}</b>\n"
+        f"{_source_line(reg)}"
         f"🆔 <code>{reg['user_id']}</code>"
     )
 
@@ -320,6 +327,7 @@ def admin_card_door(reg: dict) -> str:
         f"👤 {reg.get('name', '–')} ({uname})\n"
         f"🎟 Мест: <b>{reg.get('qty', 1)}</b>\n"
         f"💰 Депозит на месте: <b>{reg.get('amount', '–')}</b>\n"
+        f"{_source_line(reg)}"
         f"🆔 <code>{reg['user_id']}</code>\n\n"
         "⚠️ Место не гарантировано – онлайн-оплату гость не делал."
     )
@@ -334,6 +342,7 @@ def admin_card(reg: dict) -> str:
         f"💳 Способ: {m.get('label', reg['payment_method'])}\n"
         f"🎟 Билетов: {reg.get('qty', 1)}\n"
         f"💰 Сумма: <b>{reg.get('amount', '–')}</b>\n"
+        f"{_source_line(reg)}"
         f"🆔 <code>{reg['user_id']}</code>"
     )
 
@@ -670,9 +679,38 @@ def sources_report(rows: list[dict]) -> str:
     lines.append(f"Всего в боте: <b>{total_users}</b>")
     lines.append(
         "\nСсылка с меткой: <code>https://t.me/&lt;бот&gt;?start=МЕТКА</code>\n"
-        "Например, флаер → <code>?start=flyer</code>, инста → <code>?start=insta</code>."
+        "Например, флаер → <code>?start=flyer</code>, инста → <code>?start=insta</code>.\n"
+        "\n🎲 Розыгрыш среди канала: <code>/source_raffle flyer</code>"
     )
     return "\n".join(lines)
+
+
+def source_raffle_usage() -> str:
+    return (
+        "🎲 <b>Розыгрыш по каналу</b>\n\n"
+        "Укажи метку канала: <code>/source_raffle flyer</code>\n"
+        "Победитель выбирается случайно среди <b>оплативших онлайн</b> с этой меткой.\n\n"
+        "Посмотреть каналы и счётчики: /sources"
+    )
+
+
+def source_raffle_empty(tag: str) -> str:
+    return (
+        f"🎲 По каналу <b>{tag}</b> пока нет оплативших онлайн – разыгрывать не среди кого.\n"
+        "Проверь метку через /sources."
+    )
+
+
+def source_raffle_result(winner: dict, tag: str, total: int) -> str:
+    uname = f"@{winner['username']}" if winner.get("username") else "(нет ника)"
+    return (
+        f"🎉 <b>Победитель розыгрыша · канал {tag}</b>\n\n"
+        f"👤 {winner.get('name', '–')} ({uname})\n"
+        f"🆔 <code>{winner['user_id']}</code>\n"
+        f"🎟 Билетов: {winner.get('qty', 1)}\n\n"
+        f"Разыграно среди <b>{total}</b> оплативших онлайн по метке «{tag}».\n"
+        "Свяжитесь с победителем, чтобы вручить приз 🥂"
+    )
 
 
 # Подсказка на свободный текст от незарегистрированных/не оплативших
@@ -729,7 +767,8 @@ def admin_help() -> str:
         "/reset_event – сброс всех регистраций под новое мероприятие\n\n"
         "<b>🎟 Гости и билеты</b>\n"
         "/refund &lt;user_id|@username&gt; – вернуть билет\n"
-        "/raffle – провести розыгрыш среди оплативших\n\n"
+        "/raffle – розыгрыш десертов среди оплативших онлайн\n"
+        "/source_raffle &lt;метка&gt; – розыгрыш среди оплативших по каналу (напр. flyer)\n\n"
         "<b>💬 Обратная связь</b>\n"
         "/feedback – разослать запрос отзыва · /feedback_off – остановить\n\n"
         "/help – показать этот список"
