@@ -82,6 +82,29 @@ async def test_start_copies_saved_announce_post(fresh_db):
     bot.send_message.assert_not_awaited()
 
 
+async def test_start_records_source_from_deeplink(fresh_db):
+    """/start flyer сохраняет канал привлечения гостю."""
+    msg = make_message(user_id=90, username="lead")
+    with patch("os.path.exists", return_value=False):
+        await cmd_start(msg, make_state(), make_command(args="Flyer!"), make_bot())
+
+    reg = await db.get_registration(90)
+    assert reg["source"] == "flyer"  # нормализовано в нижний регистр, спецсимволы убраны
+
+
+async def test_source_is_first_touch(fresh_db):
+    """Источник фиксируется по первому переходу и не перезатирается."""
+    uid = 91
+    with patch("os.path.exists", return_value=False):
+        await cmd_start(make_message(user_id=uid, username="l"), make_state(),
+                        make_command(args="flyer"), make_bot())
+        await cmd_start(make_message(user_id=uid, username="l"), make_state(),
+                        make_command(args="insta"), make_bot())
+
+    reg = await db.get_registration(uid)
+    assert reg["source"] == "flyer"
+
+
 async def test_start_returning_awaiting_payment(fresh_db):
     """Пользователь с awaiting_payment получает статус, а не анонс."""
     uid = 3

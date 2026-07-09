@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
@@ -52,6 +53,14 @@ RETURNING_STATUSES = (
 
 # ---------- /start ----------
 
+_SOURCE_RE = re.compile(r"[^a-z0-9_-]+")
+
+
+def _clean_source(raw: str) -> str:
+    """Нормализует метку канала из deep-link: только a-z0-9_-, до 32 символов."""
+    return _SOURCE_RE.sub("", raw.lower())[:32]
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, command: CommandObject, bot: Bot) -> None:
     await state.clear()
@@ -63,6 +72,13 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
     if arg.startswith("t_"):
         await checkin.process_scan(message, bot, arg[2:])
         return
+
+    # deep-link канала привлечения: /start <метка> (например, flyer, insta).
+    # Фиксируем при первом касании, чтобы понимать, откуда пришёл гость.
+    if arg:
+        src = _clean_source(arg)
+        if src:
+            await db.set_source_if_empty(user.id, src)
 
     reg = await db.get_registration(user.id)
 

@@ -84,6 +84,7 @@ async def _migrate() -> None:
         ("checked_in_at", "checked_in_at INTEGER"),
         ("arrived_count", "arrived_count INTEGER"),
         ("food_order", "food_order TEXT"),
+        ("source", "source TEXT"),
     ):
         if col not in cols:
             await _db.execute(f"ALTER TABLE registrations ADD COLUMN {ddl}")
@@ -108,6 +109,37 @@ async def ensure_user(user_id: int, username: Optional[str]) -> None:
         (user_id, username, now, now),
     )
     await _db.commit()
+
+
+async def set_source_if_empty(user_id: int, source: str) -> None:
+    """Фиксирует канал привлечения (deep-link метка) при первом касании.
+
+    Ставит источник только если он ещё не задан — так первый переход
+    (например, по QR с флаера) не перезатрётся последующими /start.
+    """
+    await _db.execute(
+        "UPDATE registrations SET source=? "
+        "WHERE user_id=? AND (source IS NULL OR source='')",
+        (source, user_id),
+    )
+    await _db.commit()
+
+
+async def count_by_source() -> list[dict]:
+    """Статистика по каналам: всего пользователей, из них оплатили онлайн / на месте."""
+    cur = await _db.execute(
+        """
+        SELECT
+            COALESCE(NULLIF(source, ''), '') AS src,
+            COUNT(*) AS total,
+            SUM(CASE WHEN status='confirmed_online' THEN 1 ELSE 0 END) AS paid,
+            SUM(CASE WHEN status='door' THEN 1 ELSE 0 END) AS door
+        FROM registrations
+        GROUP BY src
+        ORDER BY total DESC
+        """
+    )
+    return [dict(r) for r in await cur.fetchall()]
 
 
 async def get_registration(user_id: int) -> Optional[dict]:

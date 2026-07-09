@@ -654,6 +654,27 @@ def feedback_header(reg: dict) -> str:
     return f"💬 <b>Отзыв от гостя</b>\n👤 {reg.get('name', '–')} ({uname})"
 
 
+# ===================== КАНАЛЫ ПРИВЛЕЧЕНИЯ =====================
+
+def sources_report(rows: list[dict]) -> str:
+    """Отчёт по каналам: сколько пришло и оплатило по каждой deep-link метке."""
+    lines = ["📈 <b>Каналы привлечения</b>", "(зашли · оплатили онлайн · на месте)", ""]
+    total_users = sum(r["total"] for r in rows)
+    for r in rows:
+        src = r["src"] or "прямой (без метки)"
+        paid = r["paid"] or 0
+        door = r["door"] or 0
+        conv = f" · конверсия {round(100 * paid / r['total'])}%" if r["total"] else ""
+        lines.append(f"🔹 <b>{src}</b>: {r['total']} · {paid} · {door}{conv}")
+    lines.append("")
+    lines.append(f"Всего в боте: <b>{total_users}</b>")
+    lines.append(
+        "\nСсылка с меткой: <code>https://t.me/&lt;бот&gt;?start=МЕТКА</code>\n"
+        "Например, флаер → <code>?start=flyer</code>, инста → <code>?start=insta</code>."
+    )
+    return "\n".join(lines)
+
+
 # Подсказка на свободный текст от незарегистрированных/не оплативших
 FREE_TEXT_HINT = "Чтобы зарегистрироваться на концерт, нажми /start 👇"
 
@@ -691,6 +712,7 @@ def admin_help() -> str:
         "🛠 <b>Команды админ-группы</b>\n\n"
         "<b>📊 Гости и статистика</b>\n"
         "/stats – сводка по регистрациям\n"
+        "/sources – каналы привлечения (флаер, инста…)\n"
         "/guests – список всех гостей\n"
         "/sync_sheets – выгрузить всех в Google Таблицу\n\n"
         "<b>📣 Анонс и рассылки</b>\n"

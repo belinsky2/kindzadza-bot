@@ -525,6 +525,14 @@ async def cmd_stats(message: Message) -> None:
     await message.answer("\n".join(lines))
 
 
+# ---------- /sources (каналы привлечения) ----------
+
+@router.message(Command("sources"))
+async def cmd_sources(message: Message) -> None:
+    rows = await db.count_by_source()
+    await message.answer(texts.sources_report(rows), disable_web_page_preview=True)
+
+
 # ---------- Посты ----------
 
 @router.message(Command("post_now"))

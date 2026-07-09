@@ -31,7 +31,7 @@ _ws_paid = None     # лист «Оплатившие» / «Зарегистри
 # --- Платное событие ---
 HEADER_ALL_PAID = [
     "user_id", "Имя", "Ник", "Кол-во", "Способ",
-    "Сумма", "Статус", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
+    "Сумма", "Статус", "Источник", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
 ]
 
 HEADER_PAID = [
@@ -42,7 +42,7 @@ HEADER_PAID = [
 # --- Бесплатное событие (без колонок оплаты) ---
 HEADER_ALL_FREE = [
     "user_id", "Имя", "Ник", "Кол-во мест",
-    "Статус", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
+    "Статус", "Источник", "Номера розыгрыша", "Пришло", "Создано", "Обновлено",
 ]
 
 HEADER_REG_FREE = [
@@ -147,11 +147,13 @@ def _row_all(reg: dict) -> list:
     uid = str(reg["user_id"])
     name = reg.get("name") or ""
     nick = f"@{reg['username']}" if reg.get("username") else ""
+    source = reg.get("source") or ""
     if config.FREE_EVENT:
         return [
             uid, name, nick,
             reg.get("qty") or "",
             _status_label(reg.get("status")),
+            source,
             reg.get("raffle_numbers") or "",
             _arrived_str(reg),
             _fmt_ts(reg.get("created_at")),
@@ -164,6 +166,7 @@ def _row_all(reg: dict) -> list:
         method,
         reg.get("amount") or "",
         _status_label(reg.get("status")),
+        source,
         reg.get("raffle_numbers") or "",
         _arrived_str(reg),
         _fmt_ts(reg.get("created_at")),
