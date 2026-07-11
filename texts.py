@@ -617,31 +617,36 @@ def raffle_no_win() -> str:
     )
 
 
-def raffle_admin_preview(total_guests: int, total_numbers: int, already_done: bool) -> str:
-    warn = "\n\n⚠️ Розыгрыш уже проводился! Запустить повторно?" if already_done else ""
+def raffle_admin_preview(eligible_guests: int, pool_numbers: int, already_won: int) -> str:
+    won_line = f"🎂 Уже разыграно десертов: <b>{already_won}</b>\n" if already_won else ""
     return (
-        f"🎰 <b>Розыгрыш десертов</b>{warn}\n\n"
-        f"Участников: <b>{total_guests}</b> гостей · <b>{total_numbers}</b> номеров в пуле\n"
-        f"(у гостя с 2 билетами – 2 шанса)\n"
-        f"Призов: <b>3 десерта</b>\n\n"
-        "Нажми кнопку – бот случайно выберет 3 победителей и разошлёт им сообщения:"
+        "🎂 <b>Розыгрыш десерта</b> · 1 победитель за запуск\n\n"
+        f"{won_line}"
+        f"Участников осталось: <b>{eligible_guests}</b> · номеров в пуле: <b>{pool_numbers}</b>\n"
+        "(у гостя с 2 билетами – 2 шанса; прошлые победители исключены)\n\n"
+        "Нажми кнопку – бот выберет <b>1</b> победителя. "
+        "Хочешь разыграть несколько десертов – запусти /raffle столько же раз."
     )
 
 
-def raffle_admin_result(winner_regs: list[tuple[dict, int]], sent_w: int, sent_l: int) -> str:
-    medals = ["🥇", "🥈", "🥉"]
-    lines = ["🎰 <b>Розыгрыш проведён!</b>\n"]
-    for i, (reg, num) in enumerate(winner_regs):
-        medal = medals[i] if i < len(medals) else "🏅"
-        uname = f" @{reg['username']}" if reg.get("username") else ""
-        lines.append(f"{medal} №{num} – {reg.get('name', '–')}{uname}")
-    lines.append(f"\n✅ Поздравления отправлены: {sent_w}")
-    lines.append(f"😊 Утешительных отправлено: {sent_l}")
-    return "\n".join(lines)
+def raffle_one_result(reg: dict, num: int, total_won: int) -> str:
+    uname = f" @{reg['username']}" if reg.get("username") else ""
+    return (
+        f"🎉 <b>Победитель десерта №{total_won}</b>\n\n"
+        f"🥇 №{num} – {reg.get('name', '–')}{uname}\n"
+        f"🆔 <code>{reg['user_id']}</code>\n\n"
+        "Поздравление отправлено победителю в личку 🎂\n"
+        "▶️ Запусти /raffle ещё раз, чтобы разыграть следующий десерт."
+    )
 
 
-def raffle_not_enough() -> str:
-    return "Недостаточно участников для розыгрыша (нужно минимум 3 уникальных гостя)."
+def raffle_none_left(already_won: int) -> str:
+    if already_won:
+        return (
+            f"🎂 Все участники уже разыграны (десертов выдано: <b>{already_won}</b>).\n"
+            "Новых победителей среди оплативших онлайн не осталось."
+        )
+    return "Пока некому разыгрывать: нет оплативших онлайн с номерами розыгрыша."
 
 
 # ===================== ОБРАТНАЯ СВЯЗЬ =====================
@@ -694,22 +699,28 @@ def source_raffle_usage() -> str:
     )
 
 
-def source_raffle_empty(tag: str) -> str:
+def source_raffle_empty(tag: str, already_won: int = 0) -> str:
+    if already_won:
+        return (
+            f"🎲 По каналу <b>{tag}</b> все оплатившие уже разыграны "
+            f"(победителей: <b>{already_won}</b>). Новых нет."
+        )
     return (
         f"🎲 По каналу <b>{tag}</b> пока нет оплативших онлайн – разыгрывать не среди кого.\n"
         "Проверь метку через /sources."
     )
 
 
-def source_raffle_result(winner: dict, tag: str, total: int) -> str:
+def source_raffle_result(winner: dict, tag: str, pool_total: int, total_won: int) -> str:
     uname = f"@{winner['username']}" if winner.get("username") else "(нет ника)"
     return (
-        f"🎉 <b>Победитель розыгрыша · канал {tag}</b>\n\n"
+        f"🎉 <b>Победитель · канал {tag} (№{total_won})</b>\n\n"
         f"👤 {winner.get('name', '–')} ({uname})\n"
         f"🆔 <code>{winner['user_id']}</code>\n"
         f"🎟 Билетов: {winner.get('qty', 1)}\n\n"
-        f"Разыграно среди <b>{total}</b> оплативших онлайн по метке «{tag}».\n"
-        "Свяжитесь с победителем, чтобы вручить приз 🥂"
+        f"Разыграно среди <b>{pool_total}</b> оплативших онлайн по «{tag}» "
+        f"(победителей уже {total_won}, они исключены из следующих запусков).\n"
+        f"▶️ Ещё раз: <code>/source_raffle {tag}</code>. Свяжитесь с победителем 🥂"
     )
 
 
@@ -767,8 +778,8 @@ def admin_help() -> str:
         "/reset_event – сброс всех регистраций под новое мероприятие\n\n"
         "<b>🎟 Гости и билеты</b>\n"
         "/refund &lt;user_id|@username&gt; – вернуть билет\n"
-        "/raffle – розыгрыш десертов среди оплативших онлайн\n"
-        "/source_raffle &lt;метка&gt; – розыгрыш среди оплативших по каналу (напр. flyer)\n\n"
+        "/raffle – розыгрыш десерта: 1 победитель за запуск (запускай сколько нужно)\n"
+        "/source_raffle &lt;метка&gt; – розыгрыш по каналу: 1 победитель за запуск (напр. flyer)\n\n"
         "<b>💬 Обратная связь</b>\n"
         "/feedback – разослать запрос отзыва · /feedback_off – остановить\n\n"
         "/help – показать этот список"

@@ -275,12 +275,18 @@ async def reset_all_registrations() -> int:
     await _db.execute(
         "UPDATE registrations SET status='new', qty=1, payment_method=NULL, amount=NULL, "
         "raffle_numbers=NULL, ticket_code=NULL, checked_in_at=NULL, arrived_count=NULL, "
-        "food_order=NULL, updated_at=?",
+        "food_order=NULL, source=NULL, updated_at=?",
         (_now(),),
     )
     await _db.execute("UPDATE meta SET value='0' WHERE key='raffle_counter'")
     await _db.commit()
     return n
+
+
+async def delete_meta_prefix(prefix: str) -> None:
+    """Удаляет все ключи meta, начинающиеся с prefix (например, списки победителей)."""
+    await _db.execute("DELETE FROM meta WHERE key LIKE ?", (prefix + "%",))
+    await _db.commit()
 
 
 async def check_in(user_id: int, arrived: int) -> None:

@@ -87,18 +87,17 @@ async def test_raffle_cmd_shows_preview(fresh_db):
     assert "5" in text  # 5 участников
 
 
-async def test_raffle_cmd_not_enough(fresh_db):
-    await _setup_raffle_guests(2)  # меньше 3
+async def test_raffle_no_participants(fresh_db):
     msg = make_message(user_id=9999, text="/raffle")
 
     await cmd_raffle(msg)
 
     text = msg.answer.call_args[0][0]
-    assert "недостаточно" in text.lower()
+    assert "некому" in text.lower()
 
 
-async def test_raffle_picks_3_unique_winners(fresh_db):
-    uids = await _setup_raffle_guests(10)
+async def test_raffle_picks_one_winner_no_consolation(fresh_db):
+    await _setup_raffle_guests(10)
     bot = make_bot()
 
     call = make_callback(data="raffle:run", user_id=9999)
@@ -106,24 +105,46 @@ async def test_raffle_picks_3_unique_winners(fresh_db):
 
     await on_raffle(call, bot)
 
-    # 3 победителя получили поздравление
+    # ровно 1 победитель получил поздравление
     winner_calls = [
         c for c in bot.send_message.await_args_list
         if "выиграл" in (c.args[1] if len(c.args) > 1 else "")
     ]
-    assert len(winner_calls) == 3
-    winner_uids = {c.args[0] for c in winner_calls}
-    assert len(winner_uids) == 3  # уникальные гости
-
-    # 7 остальных получили утешительное
+    assert len(winner_calls) == 1
+    # утешительные больше не рассылаются (модель «1 запуск = 1 приз»)
     loser_calls = [
         c for c in bot.send_message.await_args_list
         if "удача" in (c.args[1] if len(c.args) > 1 else "")
     ]
-    assert len(loser_calls) == 7
+    assert len(loser_calls) == 0
+    # победитель записан в список выигравших
+    won = await db.get_meta("raffle_winner_ids")
+    assert str(winner_calls[0].args[0]) in (won or "")
 
-    # Флаг выставлен
-    assert await db.get_meta("raffle_done") == "1"
+
+async def test_raffle_excludes_previous_winners(fresh_db):
+    """Три запуска среди трёх гостей → три разных победителя, четвёртый — пусто."""
+    await _setup_raffle_guests(3)
+    bot = make_bot()
+
+    for _ in range(3):
+        call = make_callback(data="raffle:run", user_id=9999)
+        call.message.edit_text = AsyncMock()
+        await on_raffle(call, bot)
+
+    winner_calls = [
+        c for c in bot.send_message.await_args_list
+        if "выиграл" in (c.args[1] if len(c.args) > 1 else "")
+    ]
+    winner_uids = [c.args[0] for c in winner_calls]
+    assert len(winner_uids) == 3
+    assert len(set(winner_uids)) == 3  # без повторов
+
+    # четвёртый запуск — участников не осталось
+    call = make_callback(data="raffle:run", user_id=9999)
+    call.message.edit_text = AsyncMock()
+    await on_raffle(call, bot)
+    call.answer.assert_awaited()  # показан alert «все разыграны»
 
 
 async def test_raffle_cancel(fresh_db):
@@ -137,15 +158,16 @@ async def test_raffle_cancel(fresh_db):
     call.answer.assert_awaited()
 
 
-async def test_raffle_already_done_shows_warning(fresh_db):
-    await _setup_raffle_guests(5)
-    await db.set_meta("raffle_done", "1")
+async def test_raffle_preview_shows_already_won(fresh_db):
+    uids = await _setup_raffle_guests(5)
+    await db.set_meta("raffle_winner_ids", str(uids[0]))  # один уже выиграл
     msg = make_message(user_id=9999, text="/raffle")
 
     await cmd_raffle(msg)
 
     text = msg.answer.call_args[0][0]
-    assert "уже проводился" in text.lower()
+    assert "уже разыграно" in text.lower()
+    assert "4" in text  # осталось 4 из 5
 
 
 async def test_raffle_guest_with_2_tickets_has_2_chances(fresh_db):

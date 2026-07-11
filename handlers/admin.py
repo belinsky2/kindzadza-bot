@@ -147,19 +147,31 @@ async def cmd_feedback_off(message: Message) -> None:
 
 # ---------- /raffle ----------
 
-RAFFLE_WINNERS = 3
+# Ключи в meta со списком уже выигравших (чтобы не повторялись между запусками)
+RAFFLE_WINNERS_KEY = "raffle_winner_ids"
+SOURCE_WINNERS_PREFIX = "source_winner_ids:"
+
+
+async def _won_ids(key: str) -> set[int]:
+    raw = await db.get_meta(key) or ""
+    return {int(x) for x in raw.split(",") if x.strip().lstrip("-").isdigit()}
+
+
+async def _add_won(key: str, uid: int, won: set[int]) -> None:
+    won.add(uid)
+    await db.set_meta(key, ",".join(str(u) for u in sorted(won)))
 
 
 @router.message(Command("raffle"))
 async def cmd_raffle(message: Message) -> None:
-    pool = await db.get_raffle_pool()
-    unique_guests = len({uid for uid, _ in pool})
-    already_done = await db.get_meta("raffle_done") == "1"
-    if unique_guests < RAFFLE_WINNERS:
-        await message.answer(texts.raffle_not_enough())
+    won = await _won_ids(RAFFLE_WINNERS_KEY)
+    pool = [(uid, n) for uid, n in await db.get_raffle_pool() if uid not in won]
+    eligible = len({uid for uid, _ in pool})
+    if eligible == 0:
+        await message.answer(texts.raffle_none_left(len(won)))
         return
     await message.answer(
-        texts.raffle_admin_preview(unique_guests, len(pool), already_done),
+        texts.raffle_admin_preview(eligible, len(pool), len(won)),
         reply_markup=kb.raffle_confirm_kb(),
     )
 
@@ -172,50 +184,23 @@ async def on_raffle(call: CallbackQuery, bot: Bot) -> None:
         await call.message.edit_reply_markup(reply_markup=None)
         return
 
-    pool = await db.get_raffle_pool()
-    unique_uids = {uid for uid, _ in pool}
-    if len(unique_uids) < RAFFLE_WINNERS:
-        await call.answer(texts.raffle_not_enough(), show_alert=True)
+    won = await _won_ids(RAFFLE_WINNERS_KEY)
+    pool = [(uid, n) for uid, n in await db.get_raffle_pool() if uid not in won]
+    if not pool:
+        await call.answer(texts.raffle_none_left(len(won)), show_alert=True)
         return
 
-    # Честный розыгрыш: тянем из пула номеров, max 1 выигрыш на гостя
-    shuffled = pool.copy()
-    random.shuffle(shuffled)
-    winners: list[tuple[int, int]] = []  # [(user_id, number)]
-    winner_ids: set[int] = set()
-    for uid, number in shuffled:
-        if uid not in winner_ids:
-            winners.append((uid, number))
-            winner_ids.add(uid)
-        if len(winners) == RAFFLE_WINNERS:
-            break
+    # 1 победитель за запуск; шанс пропорционален числу билетов (номеров в пуле)
+    uid, num = random.choice(pool)
+    await _add_won(RAFFLE_WINNERS_KEY, uid, won)
+    reg = await db.get_registration(uid)
+    try:
+        await bot.send_message(uid, texts.raffle_winner(reg, num))
+    except Exception:
+        log.exception("Не удалось отправить поздравление пользователю %s", uid)
 
-    # Рассылаем поздравления победителям
-    sent_w = 0
-    for uid, num in winners:
-        reg = await db.get_registration(uid)
-        try:
-            await bot.send_message(uid, texts.raffle_winner(reg, num))
-            sent_w += 1
-        except Exception:
-            log.exception("Не удалось отправить поздравление пользователю %s", uid)
-
-    # Утешительное — всем остальным оплатившим
-    all_uids = await db.list_user_ids_by_statuses((db.STATUS_CONFIRMED_ONLINE,))
-    sent_l = 0
-    for uid in all_uids:
-        if uid not in winner_ids:
-            try:
-                await bot.send_message(uid, texts.raffle_no_win())
-                sent_l += 1
-            except Exception:
-                log.exception("Не удалось отправить утешительное пользователю %s", uid)
-
-    await db.set_meta("raffle_done", "1")
-
-    winner_regs = [(await db.get_registration(uid), num) for uid, num in winners]
-    result = texts.raffle_admin_result(winner_regs, sent_w, sent_l)
     await call.answer("Готово ✅")
+    result = texts.raffle_one_result(reg, num, len(won))
     try:
         await call.message.edit_text(result, reply_markup=None)
     except Exception:
@@ -431,6 +416,9 @@ async def on_reset_event(call: CallbackQuery) -> None:
     # сбрасываем операционные флаги прошлого события
     for key in ("sold_out_override", "raffle_done", FEEDBACK_META_KEY, "bot_closed"):
         await db.set_meta(key, "0")
+    # чистим списки победителей розыгрышей (десерты + по каналам)
+    await db.delete_meta_prefix(RAFFLE_WINNERS_KEY)
+    await db.delete_meta_prefix(SOURCE_WINNERS_PREFIX)
     # перезаписываем Google-таблицу под чистый лист
     regs = await db.get_all_registrations(include_new=True)
     await sheets.sync_all(regs)
@@ -543,12 +531,18 @@ async def cmd_source_raffle(message: Message, command: CommandObject) -> None:
     if not tag:
         await message.answer(texts.source_raffle_usage(), disable_web_page_preview=True)
         return
-    candidates = await db.get_paid_by_source(tag)
+    key = SOURCE_WINNERS_PREFIX + tag
+    won = await _won_ids(key)
+    all_paid = await db.get_paid_by_source(tag)
+    candidates = [r for r in all_paid if r["user_id"] not in won]
     if not candidates:
-        await message.answer(texts.source_raffle_empty(tag))
+        await message.answer(texts.source_raffle_empty(tag, len(won)))
         return
     winner = random.choice(candidates)
-    await message.answer(texts.source_raffle_result(winner, tag, len(candidates)))
+    await _add_won(key, winner["user_id"], won)
+    await message.answer(
+        texts.source_raffle_result(winner, tag, len(all_paid), len(won))
+    )
 
 
 # ---------- Посты ----------
