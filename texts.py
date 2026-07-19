@@ -9,7 +9,7 @@ def greeting_closed() -> str:
     return (
         "Привет! 👋\n\n"
         "Сейчас бот временно не принимает заявки.\n\n"
-        "Мы скоро вернёмся – следите за новыми анонсами «Киндзадза» 🎤\n\n"
+        f"Мы скоро вернёмся – следите за новыми анонсами «{config.BRAND_NAME}» 🎤\n\n"
         "📸 <a href=\"https://www.instagram.com/aram_belinsky\">Подписывайтесь на инстаграм</a>"
     )
 
@@ -17,12 +17,12 @@ def greeting_closed() -> str:
 def greeting_sold_out() -> str:
     links = []
     if config.TG_LINK:
-        links.append(f"<a href=\"{config.TG_LINK}\">TG Киндзадза</a>")
+        links.append(f"<a href=\"{config.TG_LINK}\">Наш Telegram</a>")
     if config.INSTA_LINK:
-        links.append(f"<a href=\"{config.INSTA_LINK}\">Инста Киндзадза</a>")
+        links.append(f"<a href=\"{config.INSTA_LINK}\">Instagram</a>")
     links_line = (" · ".join(links) + "\n") if links else ""
     return (
-        "🎉 Все билеты проданы – спасибо за интерес к концерту «Киндзадза»!\n\n"
+        f"🎉 Все билеты проданы – спасибо за интерес к «{config.BRAND_NAME}»!\n\n"
         "К сожалению, регистрация закрыта: мест больше нет.\n\n"
         f"📅 {config.EVENT_DATE}, {config.EVENT_TIME} – ждём тех, кто уже с нами!\n"
         f"{links_line}"
@@ -189,9 +189,9 @@ def confirmed(reg: dict) -> str:
     map_line = f" – <a href=\"{config.EVENT_MAP_URL}\">карта</a>" if config.EVENT_MAP_URL else ""
     links = []
     if config.TG_LINK:
-        links.append(f"<a href=\"{config.TG_LINK}\">TG Киндзадза</a>")
+        links.append(f"<a href=\"{config.TG_LINK}\">Наш Telegram</a>")
     if config.INSTA_LINK:
-        links.append(f"<a href=\"{config.INSTA_LINK}\">Инста Киндзадза</a>")
+        links.append(f"<a href=\"{config.INSTA_LINK}\">Instagram</a>")
     links_line = (" · ".join(links) + "\n") if links else ""
     return (
         "🎉 Оплата подтверждена – спасибо, ты с нами!\n\n"
@@ -459,7 +459,7 @@ def admin_reminder_nudge(when: str, paid: int, total_users: int) -> str:
 def reminder_paid(when: str) -> str:
     map_line = f"\n🗺 <a href=\"{config.EVENT_MAP_URL}\">Карта</a>" if config.EVENT_MAP_URL else ""
     return (
-        f"🎤 Привет! {when} ждём тебя на стендапе «Киндзадза».\n\n"
+        f"🎤 Привет! {when} ждём тебя на «{config.BRAND_NAME}».\n\n"
         f"📅 {config.EVENT_DATE}, начало {config.EVENT_TIME} (двери {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}{map_line}\n\n"
         "Будет тепло, весело и вкусно. До встречи 🥂"
@@ -468,7 +468,7 @@ def reminder_paid(when: str) -> str:
 
 def reminder_door(when: str) -> str:
     return (
-        f"🎤 {when} – стендап «Киндзадза»! Ты записан на оплату на месте.\n\n"
+        f"🎤 {when} – «{config.BRAND_NAME}»! Ты записан на оплату на месте.\n\n"
         f"📅 {config.EVENT_DATE}, начало {config.EVENT_TIME} (двери {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}\n\n"
         "⚠️ Место не гарантировано. Можешь ещё успеть оплатить онлайн –\n"
@@ -478,7 +478,7 @@ def reminder_door(when: str) -> str:
 
 def reminder_not_paid(when: str) -> str:
     return (
-        f"🎤 {when} – стендап «Киндзадза»!\n"
+        f"🎤 {when} – «{config.BRAND_NAME}»!\n"
         "Места ещё есть, но заканчиваются. Оплати онлайн –\n"
         "гарантируй место и участвуй в розыгрыше десертов 🎂 👉 /start"
     )
@@ -602,7 +602,7 @@ def kitchen_send_failed() -> str:
 def raffle_winner(reg: dict, winning_number: int) -> str:
     return (
         f"🎉 Поздравляем! Твой номер <b>№{winning_number}</b> выиграл!\n\n"
-        "Ты получаешь десерт на сегодняшнем концерте «Киндзадза» 🎂\n"
+        "Ты получаешь десерт на сегодняшнем вечере 🎂\n"
         "Просто покажи это сообщение официанту – и он принесёт твой десерт.\n\n"
         "Приятного вечера! 🥂"
     )
@@ -652,7 +652,7 @@ def raffle_none_left(already_won: int) -> str:
 # ===================== ОБРАТНАЯ СВЯЗЬ =====================
 
 FEEDBACK_REQUEST = (
-    "Спасибо, что были с нами в «Киндзадзе» сегодня! 🙏\n"
+    "Спасибо, что были с нами сегодня! 🙏\n"
     "Ну что, как вам вечер? 🎤\n"
     "Мы хотим становиться лучше – и без вас никак. Напишите пару слов: "
     "что понравилось, над чем поработать.\n"
