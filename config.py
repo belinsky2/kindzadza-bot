@@ -47,7 +47,7 @@ GOOGLE_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials
 SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "").strip()
 # Префикс имён листов Google Sheets. Задаётся под текущее событие прямо здесь
 # (не из .env), чтобы менять мероприятие правкой кода, а не конфига на сервере.
-SHEET_TAG: str = "11.07"
+SHEET_TAG: str = "23.07"
 
 # --- Время / таймзона ---
 TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
@@ -55,13 +55,13 @@ TZ = ZoneInfo(TZ_NAME)
 
 # --- Мероприятие ---
 # Нейтральное имя шоу (без привязки к ресторану) — используется в текстах бота.
-BRAND_NAME: str = "Стендап за ужином"
-# Задаётся под текущее событие прямо здесь (не из .env): «Стендап за ужином», 11 июля.
-EVENT_DATE: str = "11 июля"
-EVENT_TIME: str = "20:00"
-DOORS_TIME: str = "19:00"
-EVENT_LOCATION: str = "Ресторан «Кинзадза», Нячанг"
-EVENT_MAP_URL: str = "https://maps.app.goo.gl/qzGxjKLiGM8aWwcC8"
+BRAND_NAME: str = "Стендап в Нячанге"
+# Задаётся под текущее событие прямо здесь (не из .env): Stand Up в La Villa, 23 июля.
+EVENT_DATE: str = "23 июля"
+EVENT_TIME: str = "21:00"
+DOORS_TIME: str = "20:30"
+EVENT_LOCATION: str = "La Villa Art Restaurant, Нячанг"
+EVENT_MAP_URL: str = "https://share.google/mxw6tpQUqXBZGoZRs"
 
 # --- Лимит мест и дефицит ---
 EVENT_CAPACITY: int = _int("EVENT_CAPACITY", 60)
@@ -80,8 +80,8 @@ BROADCAST_RATE: int = _int("BROADCAST_RATE", 25)  # сообщений в сек
 # --- Напоминания оргам (дата+время по TZ). Задаются под событие здесь, не из .env. ---
 # Бот НЕ шлёт напоминания гостям автоматически. В эти моменты он лишь пингует
 # админ-группу («пора напомнить гостям»), а рассылку орги делают вручную (/broadcast).
-REMINDER_EVE: str = "2026-07-10 20:00"  # вечер накануне
-REMINDER_DAY: str = "2026-07-11 12:00"  # днём в день концерта
+REMINDER_EVE: str = "2026-07-22 20:00"  # вечер накануне
+REMINDER_DAY: str = "2026-07-23 12:00"  # днём в день концерта
 # Кого тегать в напоминании оргам (ответственный за рассылку).
 REMINDER_MENTION: str = "@diuniverse"
 
@@ -100,9 +100,9 @@ USDT_NETWORK: str = os.getenv("USDT_NETWORK", "TRC20").strip()
 
 # --- Способы оплаты: цена за один билет ---
 PAYMENT_METHODS = {
-    "vnd": {"label": "🇻🇳 Донги", "unit": 200_000, "cur": "₫", "online": True},
-    "rub": {"label": "🇷🇺 Рубли", "unit": 650, "cur": "₽", "online": True},
-    "usdt": {"label": "🪙 Крипта (USDT)", "unit": 8, "cur": "USDT", "online": True},
+    "vnd": {"label": "🇻🇳 Донги", "unit": 250_000, "cur": "₫", "online": True},
+    "rub": {"label": "🇷🇺 Рубли", "unit": 850, "cur": "₽", "online": True},
+    "usdt": {"label": "🪙 Крипта (USDT)", "unit": 10, "cur": "USDT", "online": True},
     "door": {"label": "📍 Оплата на месте", "unit": 300_000, "cur": "₫", "online": False},
 }
 
