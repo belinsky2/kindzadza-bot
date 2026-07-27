@@ -54,7 +54,7 @@ def _announce_concert() -> str:
     door = config.format_amount("door", 1)
     return (
         f"🎤 <b>{config.BRAND_NAME}</b>\n\n"
-        "Вечер живого юмора: четыре комика, стендап на русском в центре Нячанга.\n\n"
+        "Вечер живого юмора: стендап на русском в центре Нячанга.\n\n"
         f"📅 <b>{config.EVENT_DATE}</b>, начало в {config.EVENT_TIME} "
         f"(сбор гостей с {config.DOORS_TIME})\n"
         f"📍 {config.EVENT_LOCATION}{map_line}\n\n"

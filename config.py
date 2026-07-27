@@ -47,21 +47,21 @@ GOOGLE_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials
 SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "").strip()
 # Префикс имён листов Google Sheets. Задаётся под текущее событие прямо здесь
 # (не из .env), чтобы менять мероприятие правкой кода, а не конфига на сервере.
-SHEET_TAG: str = "23.07"
+SHEET_TAG: str = "31.07"
 
 # --- Время / таймзона ---
 TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 TZ = ZoneInfo(TZ_NAME)
 
 # --- Мероприятие ---
-# Нейтральное имя шоу (без привязки к ресторану) — используется в текстах бота.
-BRAND_NAME: str = "Стендап в Нячанге"
-# Задаётся под текущее событие прямо здесь (не из .env): Stand Up в La Villa, 23 июля.
-EVENT_DATE: str = "23 июля"
+# Имя шоу — используется в текстах бота (напоминания, заглушка и т.п.).
+BRAND_NAME: str = "Прожарка"
+# Задаётся под текущее событие прямо здесь (не из .env): «Прожарка», 31 июля, Кинзадза.
+EVENT_DATE: str = "31 июля"
 EVENT_TIME: str = "21:00"
-DOORS_TIME: str = "20:30"
-EVENT_LOCATION: str = "La Villa Art Restaurant, Нячанг"
-EVENT_MAP_URL: str = "https://share.google/mxw6tpQUqXBZGoZRs"
+DOORS_TIME: str = "20:00"
+EVENT_LOCATION: str = "Ресторан «Кинзадза», Нячанг"
+EVENT_MAP_URL: str = "https://maps.app.goo.gl/yqCCbWtx5zYamNESA"
 
 # --- Лимит мест и дефицит ---
 EVENT_CAPACITY: int = _int("EVENT_CAPACITY", 60)
@@ -80,8 +80,8 @@ BROADCAST_RATE: int = _int("BROADCAST_RATE", 25)  # сообщений в сек
 # --- Напоминания оргам (дата+время по TZ). Задаются под событие здесь, не из .env. ---
 # Бот НЕ шлёт напоминания гостям автоматически. В эти моменты он лишь пингует
 # админ-группу («пора напомнить гостям»), а рассылку орги делают вручную (/broadcast).
-REMINDER_EVE: str = "2026-07-22 20:00"  # вечер накануне
-REMINDER_DAY: str = "2026-07-23 12:00"  # днём в день концерта
+REMINDER_EVE: str = "2026-07-30 20:00"  # вечер накануне
+REMINDER_DAY: str = "2026-07-31 12:00"  # днём в день концерта
 # Кого тегать в напоминании оргам (ответственный за рассылку).
 REMINDER_MENTION: str = "@diuniverse"
 
@@ -100,9 +100,9 @@ USDT_NETWORK: str = os.getenv("USDT_NETWORK", "TRC20").strip()
 
 # --- Способы оплаты: цена за один билет ---
 PAYMENT_METHODS = {
-    "vnd": {"label": "🇻🇳 Донги", "unit": 250_000, "cur": "₫", "online": True},
-    "rub": {"label": "🇷🇺 Рубли", "unit": 850, "cur": "₽", "online": True},
-    "usdt": {"label": "🪙 Крипта (USDT)", "unit": 10, "cur": "USDT", "online": True},
+    "vnd": {"label": "🇻🇳 Донги", "unit": 200_000, "cur": "₫", "online": True},
+    "rub": {"label": "🇷🇺 Рубли", "unit": 650, "cur": "₽", "online": True},
+    "usdt": {"label": "🪙 Крипта (USDT)", "unit": 8, "cur": "USDT", "online": True},
     "door": {"label": "📍 Оплата на месте", "unit": 300_000, "cur": "₫", "online": False},
 }
 
@@ -113,8 +113,8 @@ DB_PATH: str = os.getenv("DB_PATH", "bot.db").strip()
 CONTENT_DIR: str = os.getenv("CONTENT_DIR", "content").strip()
 ANNOUNCE_IMAGE: str = os.path.join(CONTENT_DIR, "announce.jpg")
 MENU_IMAGE: str = os.path.join(CONTENT_DIR, "menu.jpg")
-# Ссылка на онлайн-меню (шлётся после оплаты вместо фото). Пусто → меню не прикладываем.
-MENU_URL: str = "https://lavillant.com/menu"
+# Ссылка на онлайн-меню (шлётся после оплаты вместо фото). Пусто → используем фото menu.jpg.
+MENU_URL: str = ""
 PAYMENT_QR_VND: str = os.path.join(CONTENT_DIR, "payment_qr_vnd.jpg")
 PAYMENT_QR_USDT: str = os.path.join(CONTENT_DIR, "payment_qr_usdt.jpg")
 POSTS_DIR: str = os.path.join(CONTENT_DIR, "posts")

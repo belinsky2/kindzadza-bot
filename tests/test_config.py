@@ -11,32 +11,32 @@ import config
 
 def test_format_amount_vnd_single():
     result = config.format_amount("vnd", 1)
-    assert result == "250 000 ₫"
+    assert result == "200 000 ₫"
 
 
 def test_format_amount_vnd_multiple():
     result = config.format_amount("vnd", 3)
-    assert result == "750 000 ₫"
+    assert result == "600 000 ₫"
 
 
 def test_format_amount_rub_single():
     result = config.format_amount("rub", 1)
-    assert result == "850 ₽"
+    assert result == "650 ₽"
 
 
 def test_format_amount_rub_multiple():
     result = config.format_amount("rub", 5)
-    assert result == "4 250 ₽"
+    assert result == "3 250 ₽"
 
 
 def test_format_amount_usdt_single():
     result = config.format_amount("usdt", 1)
-    assert result == "10 USDT"
+    assert result == "8 USDT"
 
 
 def test_format_amount_usdt_multiple():
     result = config.format_amount("usdt", 4)
-    assert result == "40 USDT"
+    assert result == "32 USDT"
 
 
 def test_format_amount_door_single():

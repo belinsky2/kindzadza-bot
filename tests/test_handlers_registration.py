@@ -42,7 +42,7 @@ async def test_start_new_user_no_image(fresh_db):
     state.clear.assert_awaited_once()
     bot.send_message.assert_awaited_once()
     call_text = bot.send_message.call_args[0][1]
-    assert "Стендап" in call_text
+    assert config.BRAND_NAME in call_text
 
 
 async def test_start_new_user_with_image(fresh_db):
@@ -286,7 +286,7 @@ async def test_reset_then_start_shows_greeting(fresh_db):
         await cmd_start(msg, make_state(), cmd, bot)
 
     text = bot.send_message.call_args[0][1]
-    assert "Стендап" in text  # приветствие, не статус
+    assert config.BRAND_NAME in text  # приветствие, не статус
 
 
 # ==================== on_register ====================
@@ -520,7 +520,7 @@ async def test_pay_rub_online_available(fresh_db):
 
     reg = await db.get_registration(uid)
     assert reg["payment_method"] == "rub"
-    assert reg["amount"] == "1 700 ₽"
+    assert reg["amount"] == "1 300 ₽"
 
 
 async def test_switch_method_while_waiting_screenshot(fresh_db):
@@ -539,7 +539,7 @@ async def test_switch_method_while_waiting_screenshot(fresh_db):
 
     reg = await db.get_registration(uid)
     assert reg["payment_method"] == "rub"
-    assert reg["amount"] == "1 700 ₽"  # 2 × 650
+    assert reg["amount"] == "1 300 ₽"  # 2 × 650
 
 
 async def test_pay_blocked_after_confirmation(fresh_db):

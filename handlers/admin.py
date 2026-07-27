@@ -77,11 +77,19 @@ async def on_admin_decision(call: CallbackQuery, bot: Bot) -> None:
             if config.BOT_USERNAME and reg.get("ticket_code"):
                 qr = tickets.make_qr_png(tickets.ticket_link(reg["ticket_code"]))
                 await bot.send_photo(user_id, qr, caption=texts.ticket_caption(reg))
-            # меню (ссылкой) и просьбу о заказе шлём только при первом подтверждении
+            # меню и просьбу о заказе шлём только при первом подтверждении.
+            # Если задан MENU_URL — ссылкой; иначе фото menu.jpg (если есть).
             if not is_repeat:
-                await bot.send_message(
-                    user_id, texts.menu_promo(), disable_web_page_preview=True
-                )
+                if not config.MENU_URL and os.path.exists(config.MENU_IMAGE):
+                    await bot.send_photo(
+                        user_id,
+                        FSInputFile(config.MENU_IMAGE),
+                        caption=texts.menu_promo(),
+                    )
+                else:
+                    await bot.send_message(
+                        user_id, texts.menu_promo(), disable_web_page_preview=True
+                    )
                 await bot.send_message(user_id, texts.ASK_FOOD_ORDER)
         except Exception:
             log.exception("Не удалось уведомить пользователя %s о подтверждении", user_id)
