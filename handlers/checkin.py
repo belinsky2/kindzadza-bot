@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import Bot, F, Router
@@ -13,6 +14,7 @@ from aiogram.types import CallbackQuery, Message
 import config
 import db
 import keyboards as kb
+import sheets
 import texts
 
 log = logging.getLogger(__name__)
@@ -46,14 +48,62 @@ async def process_scan(message: Message, bot: Bot, code: str) -> None:
             await message.answer(texts.scan_foreign())
         return
 
-    if reg.get("checked_in_at"):
-        await message.answer(texts.checkin_already(reg))
+    qty = int(reg.get("qty") or 1)
+    arrived = int(reg.get("arrived_count") or 0)
+    if arrived >= qty:
+        # все оплаченные места уже отмечены
+        await message.answer(texts.checkin_all_arrived(reg))
         return
 
+    remaining = qty - arrived
     await message.answer(
-        texts.checkin_card(reg),
-        reply_markup=kb.checkin_arrived_kb(code, int(reg.get("qty", 1))),
+        texts.checkin_card(reg, arrived, remaining),
+        reply_markup=kb.checkin_arrived_kb(code, remaining),
     )
+    # На первом сканировании отдаём заказ еды отдельным сообщением с кнопкой —
+    # билетер отправляет его на кухню, если гости подтвердили заказ.
+    if arrived == 0 and (reg.get("food_order") or "").strip():
+        await message.answer(
+            texts.kitchen_order_card(reg),
+            reply_markup=kb.kitchen_send_kb(reg["user_id"]),
+        )
+
+
+@router.callback_query(F.data.startswith("kit:"))
+async def on_send_to_kitchen(call: CallbackQuery, bot: Bot) -> None:
+    """Билетер нажал «Отправить на кухню» — пересылаем заказ Артуру/в кухонный чат."""
+    uid = int(call.data.split(":", 1)[1])
+    if not await is_staff(bot, call.from_user.id):
+        await call.answer("Отправлять на кухню могут только организаторы", show_alert=True)
+        return
+
+    reg = await db.get_registration(uid)
+    if not reg or not (reg.get("food_order") or "").strip():
+        await call.answer("Заказ не найден", show_alert=True)
+        return
+
+    # Куда слать: явный KITCHEN_CHAT_ID или chat_id Артура по нику (если он запускал бота)
+    target = config.KITCHEN_CHAT_ID
+    if not target and config.KITCHEN_USERNAME:
+        krec = await db.get_by_username(config.KITCHEN_USERNAME)
+        target = krec["user_id"] if krec else 0
+    if not target:
+        await call.answer(texts.kitchen_not_configured(), show_alert=True)
+        return
+
+    try:
+        await bot.send_message(target, texts.kitchen_order_card(reg))
+    except Exception:
+        log.exception("Не удалось отправить заказ на кухню (target=%s)", target)
+        await call.answer(texts.kitchen_send_failed(), show_alert=True)
+        return
+
+    await call.answer("Отправлено на кухню ✅")
+    try:
+        base = call.message.text or call.message.caption or ""
+        await call.message.edit_text(f"{base}\n\n✅ Отправлено на кухню", reply_markup=None)
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("ci:"))
@@ -68,19 +118,22 @@ async def on_checkin(call: CallbackQuery, bot: Bot) -> None:
         await call.answer("Билет не найден", show_alert=True)
         return
 
-    if reg.get("checked_in_at"):
-        await call.answer("Уже отмечен", show_alert=True)
+    qty = int(reg.get("qty") or 1)
+    arrived = int(reg.get("arrived_count") or 0)
+    if arrived >= qty:
+        await call.answer("Все уже отмечены", show_alert=True)
         try:
-            await call.message.edit_text(texts.checkin_already(reg), reply_markup=None)
+            await call.message.edit_text(texts.checkin_all_arrived(reg), reply_markup=None)
         except Exception:
             pass
         return
 
-    arrived = int(k)
-    await db.check_in(reg["user_id"], arrived)
+    new = await db.add_arrival(reg["user_id"], int(k))
     reg = await db.get_by_ticket_code(code)
+    asyncio.create_task(sheets.sync_registration(reg))
     await call.answer("Отмечено ✅")
+    text = texts.checkin_done_full(reg) if new >= qty else texts.checkin_done_partial(reg)
     try:
-        await call.message.edit_text(texts.checkin_done(reg, arrived), reply_markup=None)
+        await call.message.edit_text(text, reply_markup=None)
     except Exception:
-        await call.message.answer(texts.checkin_done(reg, arrived))
+        await call.message.answer(text)

@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 import logging
+import os
+import random
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.filters import Command, CommandObject
+from aiogram.types import CallbackQuery, FSInputFile, Message
 
 import config
 import db
@@ -18,6 +20,7 @@ import segments
 import sheets
 import texts
 import tickets
+from scheduler import FEEDBACK_META_KEY
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -28,6 +31,9 @@ router.callback_query.filter(F.message.chat.id == config.ADMIN_GROUP_ID)
 
 # Временное хранилище контента для /broadcast: {admin_user_id: payload}
 _pending_broadcast: dict[int, dict] = {}
+
+# Временное хранилище афиши для /announce: {admin_user_id: {"file_id": ...}}
+_pending_announce: dict[int, dict] = {}
 
 
 # ---------- Подтверждение / отклонение ----------
@@ -47,25 +53,48 @@ async def on_admin_decision(call: CallbackQuery, bot: Bot) -> None:
         if reg["status"] == db.STATUS_CONFIRMED_ONLINE:
             await call.answer("Уже подтверждено")
             return
-        qty = int(reg.get("qty", 1))
-        numbers = await db.assign_raffle_numbers(qty)
-        await db.set_raffle_numbers(user_id, numbers)
-        # уникальный код билета (генерим один раз)
+        # Уже выданные номера розыгрыша (если гость докупает) — их сохраняем.
+        # Их количество = число ранее подтверждённых билетов.
+        existing = [n for n in (reg.get("raffle_numbers") or "").split(",") if n.strip()]
+        is_repeat = bool(existing)
+        new_qty = int(reg.get("qty", 1))
+        # новые номера — по одному на каждый докупленный билет
+        new_numbers = await db.assign_raffle_numbers(new_qty)
+        all_numbers = [int(n) for n in existing] + new_numbers
+        await db.set_raffle_numbers(user_id, all_numbers)
+        # общее число билетов = старые + докупленные (= число всех номеров)
+        await db.set_qty(user_id, len(all_numbers))
+        # уникальный код билета (генерим один раз; тот же QR пускает всю компанию)
         if not reg.get("ticket_code"):
             await db.set_ticket_code(user_id, tickets.new_code())
         await db.update_status(user_id, db.STATUS_CONFIRMED_ONLINE)
         reg = await db.get_registration(user_id)
         await sheets.sync_registration(reg)
         try:
-            await bot.send_message(user_id, texts.confirmed(reg), disable_web_page_preview=True)
-            # QR-билет отдельным сообщением
+            text = texts.order_updated(reg) if is_repeat else texts.confirmed(reg)
+            await bot.send_message(user_id, text, disable_web_page_preview=True)
+            # QR-билет отдельным сообщением (обновлённый — на всё количество)
             if config.BOT_USERNAME and reg.get("ticket_code"):
                 qr = tickets.make_qr_png(tickets.ticket_link(reg["ticket_code"]))
                 await bot.send_photo(user_id, qr, caption=texts.ticket_caption(reg))
+            # меню и просьбу о заказе шлём только при первом подтверждении.
+            # Если задан MENU_URL — ссылкой; иначе фото menu.jpg (если есть).
+            if not is_repeat:
+                if not config.MENU_URL and os.path.exists(config.MENU_IMAGE):
+                    await bot.send_photo(
+                        user_id,
+                        FSInputFile(config.MENU_IMAGE),
+                        caption=texts.menu_promo(),
+                    )
+                else:
+                    await bot.send_message(
+                        user_id, texts.menu_promo(), disable_web_page_preview=True
+                    )
+                await bot.send_message(user_id, texts.ASK_FOOD_ORDER)
         except Exception:
             log.exception("Не удалось уведомить пользователя %s о подтверждении", user_id)
-        await _mark_card(call, f"✅ Подтвердил {actor} · номера: "
-                               f"{reg.get('raffle_numbers')}")
+        note = "✅ Подтвердил (докупка)" if is_repeat else "✅ Подтвердил"
+        await _mark_card(call, f"{note} {actor} · номера: {reg.get('raffle_numbers')}")
         await call.answer("Подтверждено ✅")
 
     elif action == "reject":
@@ -93,15 +122,367 @@ async def _mark_card(call: CallbackQuery, note: str) -> None:
         log.debug("Не удалось обновить карточку (необязательно).")
 
 
+# ---------- /help ----------
+
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    """Список всех команд админ-группы с описанием."""
+    await message.answer(texts.admin_help(), disable_web_page_preview=True)
+
+
+# ---------- /feedback ----------
+
+@router.message(Command("feedback"))
+async def cmd_feedback(message: Message, bot: Bot) -> None:
+    """Немедленно разослать запрос обратной связи и включить пересылку ответов."""
+    await scheduler.send_feedback_request(bot)
+    await message.answer(
+        "✅ Запрос обратной связи разослан всем оплатившим.\n"
+        "Ответы гостей (текст, голосовые, кружочки) будут пересылаться сюда.\n\n"
+        "Остановить: <code>/feedback_off</code>"
+    )
+
+
+@router.message(Command("feedback_off"))
+async def cmd_feedback_off(message: Message) -> None:
+    """Выключить пересылку отзывов."""
+    await db.set_meta(FEEDBACK_META_KEY, "0")
+    await message.answer("❌ Сбор обратной связи остановлен.")
+
+
+# ---------- /raffle ----------
+
+# Ключи в meta со списком уже выигравших (чтобы не повторялись между запусками)
+RAFFLE_WINNERS_KEY = "raffle_winner_ids"
+SOURCE_WINNERS_PREFIX = "source_winner_ids:"
+
+
+async def _won_ids(key: str) -> set[int]:
+    raw = await db.get_meta(key) or ""
+    return {int(x) for x in raw.split(",") if x.strip().lstrip("-").isdigit()}
+
+
+async def _add_won(key: str, uid: int, won: set[int]) -> None:
+    won.add(uid)
+    await db.set_meta(key, ",".join(str(u) for u in sorted(won)))
+
+
+@router.message(Command("raffle"))
+async def cmd_raffle(message: Message) -> None:
+    won = await _won_ids(RAFFLE_WINNERS_KEY)
+    pool = [(uid, n) for uid, n in await db.get_raffle_pool() if uid not in won]
+    eligible = len({uid for uid, _ in pool})
+    if eligible == 0:
+        await message.answer(texts.raffle_none_left(len(won)))
+        return
+    await message.answer(
+        texts.raffle_admin_preview(eligible, len(pool), len(won)),
+        reply_markup=kb.raffle_confirm_kb(),
+    )
+
+
+@router.callback_query(F.data.startswith("raffle:"))
+async def on_raffle(call: CallbackQuery, bot: Bot) -> None:
+    action = call.data.split(":", 1)[1]
+    if action == "cancel":
+        await call.answer("Отменено")
+        await call.message.edit_reply_markup(reply_markup=None)
+        return
+
+    won = await _won_ids(RAFFLE_WINNERS_KEY)
+    pool = [(uid, n) for uid, n in await db.get_raffle_pool() if uid not in won]
+    if not pool:
+        await call.answer(texts.raffle_none_left(len(won)), show_alert=True)
+        return
+
+    # 1 победитель за запуск; шанс пропорционален числу билетов (номеров в пуле)
+    uid, num = random.choice(pool)
+    await _add_won(RAFFLE_WINNERS_KEY, uid, won)
+    reg = await db.get_registration(uid)
+    try:
+        await bot.send_message(uid, texts.raffle_winner(reg, num))
+    except Exception:
+        log.exception("Не удалось отправить поздравление пользователю %s", uid)
+
+    await call.answer("Готово ✅")
+    result = texts.raffle_one_result(reg, num, len(won))
+    try:
+        await call.message.edit_text(result, reply_markup=None)
+    except Exception:
+        await call.message.answer(result)
+
+
+# ---------- /soldout ----------
+
+@router.message(Command("soldout"))
+async def cmd_soldout(message: Message) -> None:
+    """Открыть/закрыть продажи: /soldout → закрыть, /soldout off → открыть."""
+    args = message.text.split()
+    turn_off = len(args) > 1 and args[1].strip().lower() == "off"
+    if turn_off:
+        await db.set_meta("sold_out_override", "0")
+        await message.answer("✅ Продажи открыты – бот снова принимает регистрации.")
+    else:
+        await db.set_meta("sold_out_override", "1")
+        taken = await db.seats_taken()
+        await message.answer(
+            f"🚫 Продажи закрыты – режим солд-аута включён.\n"
+            f"Занято мест: {taken}.\n\n"
+            "Новые гости увидят «Все билеты проданы».\n"
+            "Вернуть приём: <code>/soldout off</code>"
+        )
+
+
+# ---------- /close / /open ----------
+
+@router.message(Command("close"))
+async def cmd_close(message: Message) -> None:
+    """Закрыть бота для новых пользователей – они увидят «скоро вернёмся»."""
+    await db.set_meta("bot_closed", "1")
+    await message.answer(
+        "🔒 Бот закрыт для новых пользователей.\n"
+        "Они видят: «Мы скоро вернёмся».\n\n"
+        "Открыть снова: <code>/open</code>"
+    )
+
+
+@router.message(Command("open"))
+async def cmd_open(message: Message) -> None:
+    """Открыть бота для новых пользователей."""
+    await db.set_meta("bot_closed", "0")
+    await message.answer("✅ Бот открыт – новые пользователи снова видят анонс.")
+
+
+# ---------- /refund ----------
+
+@router.message(Command("refund"))
+async def cmd_refund(message: Message) -> None:
+    """Возврат билета: /refund <user_id> или /refund @username."""
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer(texts.refund_usage())
+        return
+
+    arg = args[1].strip()
+    if arg.startswith("@"):
+        reg = await db.get_by_username(arg[1:])
+    elif arg.lstrip("-").isdigit():
+        reg = await db.get_registration(int(arg))
+    else:
+        reg = None
+
+    if not reg:
+        await message.answer(texts.refund_not_found(arg))
+        return
+
+    await db.refund(reg["user_id"])
+    reg = await db.get_registration(reg["user_id"])
+    # Полная пересборка таблицы — гость уходит с листа «Оплатившие».
+    regs = await db.get_all_registrations(include_new=True)
+    await sheets.sync_all(regs)
+    await message.answer(texts.refund_done(reg))
+
+
+# ---------- /set_announce (запомнить пост для новых пользователей) ----------
+
+@router.message(Command("set_announce"))
+async def cmd_set_announce(message: Message) -> None:
+    """Запомнить пост для новых пользователей ЦЕЛИКОМ (текст + картинка + ссылки).
+
+    Ответь этой командой на пост в группе — бот покажет его точную копию
+    на /start новым пользователям (через copy_message).
+    """
+    reply = message.reply_to_message
+    if not reply:
+        await message.answer(
+            "📷 Пришли пост-анонс (текст + картинка) в группу и <b>ответь</b> на него "
+            "командой <code>/set_announce</code> – я запомню его целиком.\n\n"
+            "Новые пользователи увидят этот пост при /start.\n"
+            "Проверить: /start в личке боту."
+        )
+        return
+    # Сохраняем координаты сообщения — на /start копируем его как есть.
+    await db.set_meta("announce_src_chat", str(message.chat.id))
+    await db.set_meta("announce_src_msg", str(reply.message_id))
+    # Фото — для запасного варианта, если исходное сообщение вдруг удалят.
+    if reply.photo:
+        await db.set_meta("announce_file_id", reply.photo[-1].file_id)
+    await message.answer(
+        "✅ Пост сохранён целиком (текст + картинка).\n"
+        "Новые пользователи увидят его при /start.\n\n"
+        "Проверь: открой бота в личке и нажми /start.\n"
+        "⚠️ Не удаляй это сообщение в группе – бот копирует его новым гостям."
+    )
+
+
+# ---------- /announce (рассылка анонса всем) ----------
+
+@router.message(Command("announce"))
+async def cmd_announce(message: Message) -> None:
+    """Разослать анонс всем пользователям + кнопка регистрации.
+
+    Рассылается ТОЧНАЯ копия сообщения, на которое ответили (фото, текст,
+    ссылки, форматирование) — через copy_message. Если ответа нет — уйдёт
+    стандартный анонс из бота (texts.announce_broadcast + сохранённая афиша).
+    """
+    reply = message.reply_to_message
+    if reply:
+        _pending_announce[message.from_user.id] = {
+            "from_chat_id": message.chat.id,
+            "message_id": reply.message_id,
+        }
+    else:
+        _pending_announce[message.from_user.id] = {}
+
+    total = len(await db.list_all_user_ids())
+    note = "" if reply else (
+        "\n\n⚠️ Ты не ответил на сообщение – уйдёт стандартный анонс из бота.\n"
+        "Чтобы разослать именно твой пост, <b>ответь</b> этой командой на сообщение с анонсом."
+    )
+    await message.answer(
+        texts.announce_admin_preview(total) + note,
+        reply_markup=kb.announce_confirm_kb(),
+        disable_web_page_preview=True,
+    )
+
+
+@router.callback_query(F.data.startswith("ann:"))
+async def on_announce(call: CallbackQuery, bot: Bot) -> None:
+    action = call.data.split(":", 1)[1]
+    if action == "cancel":
+        _pending_announce.pop(call.from_user.id, None)
+        await call.answer("Отменено")
+        await call.message.edit_reply_markup(reply_markup=None)
+        return
+
+    payload = _pending_announce.pop(call.from_user.id, None) or {}
+    from_chat_id = payload.get("from_chat_id")
+    message_id = payload.get("message_id")
+    await call.answer("Рассылаю…")
+
+    if action == "me":
+        uids = [call.from_user.id]
+    elif action == "paid":
+        uids = await segments.user_ids_paid()
+    elif action == "unpaid":
+        uids = await segments.user_ids_not_paid()
+    else:  # all
+        uids = await db.list_all_user_ids()
+
+    import broadcast as bc_mod
+    if from_chat_id and message_id:
+        # Копируем ровно тот пост, на который ответил админ, + кнопка регистрации
+        async def send_one(b: Bot, uid: int) -> None:
+            await b.copy_message(
+                uid, from_chat_id, message_id, reply_markup=kb.register_kb()
+            )
+    else:
+        # Запасной вариант: стандартный анонс из кода + сохранённая афиша
+        text = texts.announce_broadcast()
+        photo = (await db.get_meta("announce_file_id")) or None
+
+        async def send_one(b: Bot, uid: int) -> None:
+            await bc_mod.send_announce(b, uid, text, photo, kb.register_kb())
+
+    sent, failed = await bc_mod.broadcast(bot, uids, send_one)
+    await call.message.edit_reply_markup(reply_markup=None)
+    seg_label = {
+        "me": "только тебе (тест)",
+        "paid": "забронировали" if config.FREE_EVENT else "купили онлайн",
+        "unpaid": "не забронировали" if config.FREE_EVENT else "не купили",
+        "all": "все",
+    }.get(action, action)
+    await call.message.answer(
+        f"📣 Анонс разослан ({seg_label}): отправлено {sent}, ошибок {failed}."
+    )
+
+
+# ---------- /reset_event (сброс под новое мероприятие) ----------
+
+@router.message(Command("reset_event"))
+async def cmd_reset_event(message: Message) -> None:
+    """Сброс всех регистраций под новое мероприятие (пользователи сохраняются)."""
+    total = len(await db.list_all_user_ids())
+    await message.answer(
+        texts.reset_event_preview(total),
+        reply_markup=kb.reset_event_confirm_kb(),
+    )
+
+
+@router.callback_query(F.data.startswith("rev:"))
+async def on_reset_event(call: CallbackQuery) -> None:
+    action = call.data.split(":", 1)[1]
+    if action == "cancel":
+        await call.answer("Отменено")
+        await call.message.edit_reply_markup(reply_markup=None)
+        return
+
+    n = await db.reset_all_registrations()
+    # сбрасываем операционные флаги прошлого события
+    for key in ("sold_out_override", "raffle_done", FEEDBACK_META_KEY, "bot_closed"):
+        await db.set_meta(key, "0")
+    # чистим списки победителей розыгрышей (десерты + по каналам)
+    await db.delete_meta_prefix(RAFFLE_WINNERS_KEY)
+    await db.delete_meta_prefix(SOURCE_WINNERS_PREFIX)
+    # перезаписываем Google-таблицу под чистый лист
+    regs = await db.get_all_registrations(include_new=True)
+    await sheets.sync_all(regs)
+    await call.answer("Готово ✅")
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer(texts.reset_event_done(n))
+
+
+# ---------- /guests ----------
+
+@router.message(Command("guests"))
+async def cmd_guests(message: Message) -> None:
+    regs = await db.get_all_registrations()
+    for page in texts.guests_list(regs):
+        await message.answer(page)
+
+
+# ---------- /sync_sheets ----------
+
+@router.message(Command("sync_sheets"))
+async def cmd_sync_sheets(message: Message) -> None:
+    if not config.SPREADSHEET_ID:
+        await message.answer(
+            "Google Таблица не подключена: задай SPREADSHEET_ID в .env и перезапусти бота."
+        )
+        return
+    await message.answer("Синхронизирую всех гостей в таблицу…")
+    regs = await db.get_all_registrations(include_new=True)
+    n = await sheets.sync_all(regs)
+    if n < 0:
+        await message.answer(
+            "Не удалось записать в таблицу. Проверь credentials.json и доступ "
+            "сервисного аккаунта к таблице."
+        )
+    else:
+        await message.answer(f"Готово – в таблице {n} строк (включая «просто зашли»).")
+
+
 # ---------- /stats ----------
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message) -> None:
-    taken = await db.seats_taken()
-    left = config.EVENT_CAPACITY - taken
     by_status = await db.count_by_status()
     ci_orders, ci_guests = await db.checkin_totals()
+    reg = by_status.get(db.STATUS_CONFIRMED_ONLINE, {"count": 0, "qty": 0})
+    new = by_status.get(db.STATUS_NEW, {"count": 0, "qty": 0})
 
+    if config.FREE_EVENT:
+        lines = [
+            "📊 <b>Статистика</b> · Шоу за столом",
+            f"✅ Зарегистрировано: <b>{reg['count']}</b> чел. · <b>{reg['qty']}</b> мест",
+            f"🚪 На входе отмечено: <b>{ci_guests}</b> гостей ({ci_orders} брони)",
+            f"👀 Просто зашли в бота: {new['count']}",
+        ]
+        await message.answer("\n".join(lines))
+        return
+
+    taken = await db.seats_taken()
+    left = config.EVENT_CAPACITY - taken
     lines = [
         "📊 <b>Статистика</b>",
         f"Мест занято (онлайн + бронь): <b>{taken}</b> / {config.EVENT_CAPACITY}",
@@ -117,6 +498,7 @@ async def cmd_stats(message: Message) -> None:
         db.STATUS_CONFIRMED_ONLINE: "оплатили онлайн",
         db.STATUS_DOOR: "оплата на месте",
         db.STATUS_REJECTED: "отклонены",
+        db.STATUS_REFUNDED: "возвраты",
     }
     for status, label in labels.items():
         d = by_status.get(status, {"count": 0, "qty": 0})
@@ -124,14 +506,48 @@ async def cmd_stats(message: Message) -> None:
 
     # оценка выручки по подтверждённым онлайн
     rev = await db.breakdown_by_method(db.STATUS_CONFIRMED_ONLINE)
-    if rev:
+    rev_lines = [
+        f"• {config.format_amount(m, q)} ({q} билетов)"
+        for m, q in rev if m and m in config.PAYMENT_METHODS
+    ]
+    if rev_lines:
         lines.append("")
         lines.append("<b>Выручка (подтверждённые онлайн):</b>")
-        for method, qty in rev:
-            if method:
-                lines.append(f"• {config.format_amount(method, qty)} ({qty} билетов)")
+        lines.extend(rev_lines)
 
     await message.answer("\n".join(lines))
+
+
+# ---------- /sources (каналы привлечения) ----------
+
+@router.message(Command("sources"))
+async def cmd_sources(message: Message) -> None:
+    rows = await db.count_by_source()
+    await message.answer(texts.sources_report(rows), disable_web_page_preview=True)
+
+
+@router.message(Command("source_raffle"))
+async def cmd_source_raffle(message: Message, command: CommandObject) -> None:
+    """Розыгрыш: 1 случайный победитель среди оплативших онлайн по метке.
+
+    Использование: /source_raffle flyer
+    """
+    tag = (command.args or "").strip().split()[0].lower() if command.args else ""
+    if not tag:
+        await message.answer(texts.source_raffle_usage(), disable_web_page_preview=True)
+        return
+    key = SOURCE_WINNERS_PREFIX + tag
+    won = await _won_ids(key)
+    all_paid = await db.get_paid_by_source(tag)
+    candidates = [r for r in all_paid if r["user_id"] not in won]
+    if not candidates:
+        await message.answer(texts.source_raffle_empty(tag, len(won)))
+        return
+    winner = random.choice(candidates)
+    await _add_won(key, winner["user_id"], won)
+    await message.answer(
+        texts.source_raffle_result(winner, tag, len(all_paid), len(won))
+    )
 
 
 # ---------- Посты ----------
@@ -224,6 +640,10 @@ async def on_broadcast_segment(call: CallbackQuery, bot: Bot) -> None:
     await call.answer("Рассылаю…")
     if seg == "all":
         uids = await db.list_all_user_ids()
+    elif seg == "paid":
+        uids = await segments.user_ids_paid()
+    elif seg == "unpaid":
+        uids = await segments.user_ids_not_paid()
     else:
         uids = await segments.user_ids_for_segment(seg)
 
@@ -237,6 +657,7 @@ async def on_broadcast_segment(call: CallbackQuery, bot: Bot) -> None:
 
     sent, failed = await bc_mod.broadcast(bot, uids, send_one)
     await call.message.edit_reply_markup(reply_markup=None)
+    seg_label = {"paid": "купили онлайн", "unpaid": "не купили", "all": "все"}.get(seg, seg)
     await call.message.answer(
-        f"Рассылка завершена ({seg}): отправлено {sent}, ошибок {failed}."
+        f"Рассылка завершена ({seg_label}): отправлено {sent}, ошибок {failed}."
     )

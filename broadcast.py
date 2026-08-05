@@ -19,6 +19,25 @@ log = logging.getLogger(__name__)
 # send_one(bot, user_id) -> None  (выполняет сам отправку: текст/фото — на усмотрение вызывающего)
 SendOne = Callable[[Bot, int], Awaitable[None]]
 
+# Лимит подписи к фото в Telegram. Если текст длиннее — шлём фото и текст
+# двумя сообщениями, иначе кнопка не прикрепится к подписи.
+CAPTION_LIMIT = 1024
+
+
+async def send_announce(bot: Bot, chat_id: int, text: str, photo, markup) -> None:
+    """Отправить анонс: фото + текст + кнопка. Длинный текст — отдельным сообщением.
+
+    photo — file_id (str), FSInputFile или None (тогда только текст).
+    """
+    if photo is not None and len(text) <= CAPTION_LIMIT:
+        await bot.send_photo(chat_id, photo, caption=text, reply_markup=markup)
+        return
+    if photo is not None:
+        await bot.send_photo(chat_id, photo)
+    await bot.send_message(
+        chat_id, text, reply_markup=markup, disable_web_page_preview=True
+    )
+
 
 async def broadcast(bot: Bot, user_ids: list[int], send_one: SendOne) -> tuple[int, int]:
     """Возвращает (отправлено, ошибок). Пропускает заблокировавших бота."""

@@ -82,41 +82,33 @@ python main.py
 
 ## Деплой на VPS (Ubuntu, systemd)
 
+📖 **Подробная пошаговая инструкция для новичков — в [DEPLOY.md](DEPLOY.md).**
+
+Коротко: на сервере с Ubuntu выполни:
+
 ```bash
-# на сервере
-sudo apt update && sudo apt install -y python3-venv git
-git clone <repo> /opt/kindzadza-bot   # или scp файлов
-cd /opt/kindzadza-bot
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+cd /opt
+git clone <repo> kindzadza-bot
+cd kindzadza-bot
 cp .env.example .env && nano .env       # заполнить
-# при необходимости положить credentials.json и content/announce.jpg
+# положить картинки в content/ (announce.jpg, menu.jpg, payment_qr_vnd.jpg)
+bash deploy.sh                           # установит всё и запустит сервис
 ```
 
-Создай сервис `/etc/systemd/system/kindzadza-bot.service`:
+`deploy.sh` сам ставит зависимости, проверяет конфиг (`check_config.py`),
+регистрирует systemd-сервис `kindzadza-bot` (файл `kindzadza-bot.service`)
+и запускает бота. Безопасно запускать повторно после `git pull`.
 
-```ini
-[Unit]
-Description=Kindzadza Telegram bot
-After=network-online.target
-
-[Service]
-WorkingDirectory=/opt/kindzadza-bot
-ExecStart=/opt/kindzadza-bot/.venv/bin/python main.py
-Restart=always
-RestartSec=5
-User=www-data
-
-[Install]
-WantedBy=multi-user.target
-```
+Управление:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now kindzadza-bot
-sudo systemctl status kindzadza-bot
+systemctl status kindzadza-bot      # статус
+systemctl restart kindzadza-bot     # перезапуск
 journalctl -u kindzadza-bot -f      # логи
 ```
+
+> Проверить `.env` перед запуском (и локально, и на сервере):
+> `python check_config.py`
 
 ## Заметки
 

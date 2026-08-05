@@ -40,6 +40,21 @@ async def test_ensure_user_preserves_status(fresh_db):
     assert reg["status"] == db.STATUS_CONFIRMED_ONLINE
 
 
+# ==================== delete_registration ====================
+
+async def test_delete_registration_removes_record(fresh_db):
+    await db.ensure_user(5, "user5")
+    await db.set_order(5, 2, "vnd", "400 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    await db.delete_registration(5)
+    assert await db.get_registration(5) is None
+
+
+async def test_delete_registration_missing_is_noop(fresh_db):
+    # удаление несуществующей записи не должно падать
+    await db.delete_registration(999)
+    assert await db.get_registration(999) is None
+
+
 async def test_ensure_user_multiple(fresh_db):
     for uid in range(10, 15):
         await db.ensure_user(uid, f"user{uid}")
@@ -140,6 +155,21 @@ async def test_set_raffle_numbers_single(fresh_db):
     await db.set_raffle_numbers(61, [7])
     reg = await db.get_registration(61)
     assert reg["raffle_numbers"] == "7"
+
+
+# ==================== set_qty ====================
+
+async def test_set_qty_updates_only_qty(fresh_db):
+    await db.ensure_user(62, "lee")
+    await db.set_order(62, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_raffle_numbers(62, [5])
+
+    await db.set_qty(62, 3)
+
+    reg = await db.get_registration(62)
+    assert reg["qty"] == 3
+    assert reg["raffle_numbers"] == "5"                 # не затёрлось
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE  # не затёрлось
 
 
 # ==================== ticket_code ====================

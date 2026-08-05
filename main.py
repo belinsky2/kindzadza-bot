@@ -7,7 +7,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, BotCommandScopeChat
 
 import config
 import db
@@ -22,10 +22,24 @@ log = logging.getLogger("kindzadza-bot")
 
 
 async def _set_commands(bot: Bot) -> None:
+    # Команды для всех пользователей (личка с ботом)
     await bot.set_my_commands([
         BotCommand(command="start", description="Начать / регистрация"),
         BotCommand(command="status", description="Мой статус и номера розыгрыша"),
+        BotCommand(command="reset", description="Сбросить регистрацию и начать заново"),
     ])
+
+    # Команды только для админ-группы (всплывают при наборе «/»)
+    if config.ADMIN_GROUP_ID:
+        await bot.set_my_commands(
+            [
+                BotCommand(command="help", description="Все команды с описанием"),
+                BotCommand(command="stats", description="Статистика по регистрациям"),
+                BotCommand(command="guests", description="Список всех гостей"),
+                BotCommand(command="broadcast", description="Рассылка по сегментам"),
+            ],
+            scope=BotCommandScopeChat(chat_id=config.ADMIN_GROUP_ID),
+        )
 
 
 async def main() -> None:

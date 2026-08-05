@@ -8,13 +8,186 @@ import config
 import db
 from handlers.admin import (
     on_admin_decision,
+    cmd_raffle,
+    on_raffle,
     cmd_stats,
     cmd_addpost,
     cmd_broadcast,
+    cmd_refund,
+    cmd_source_raffle,
     on_broadcast_segment,
     _pending_broadcast,
 )
-from tests.conftest import make_message, make_callback, make_bot
+from tests.conftest import make_message, make_callback, make_bot, make_command
+
+
+# ==================== cmd_source_raffle ====================
+
+async def test_source_raffle_picks_winner_from_channel(fresh_db):
+    """Победитель — только из оплативших онлайн с нужной меткой."""
+    # 3 оплативших по flyer
+    for i in range(3):
+        uid = 8100 + i
+        await db.ensure_user(uid, f"f{i}")
+        await db.set_name(uid, f"Flyer {i}")
+        await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+        await db.set_source_if_empty(uid, "flyer")
+    # оплативший по insta — не должен попасть
+    await db.ensure_user(8200, "insta1")
+    await db.set_order(8200, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_source_if_empty(8200, "insta")
+    # по flyer, но НЕ оплатил — тоже мимо
+    await db.ensure_user(8300, "flyernopay")
+    await db.set_source_if_empty(8300, "flyer")
+
+    msg = make_message(user_id=1)
+    await cmd_source_raffle(msg, make_command(args="flyer"))
+
+    text = msg.answer.call_args[0][0]
+    assert "Победитель" in text and "flyer" in text
+    assert "среди <b>3</b>" in text  # пул = 3 оплативших по flyer
+
+
+async def test_source_raffle_empty_channel(fresh_db):
+    msg = make_message(user_id=1)
+    await cmd_source_raffle(msg, make_command(args="flyer"))
+    assert "нет оплативших" in msg.answer.call_args[0][0]
+
+
+async def test_source_raffle_no_arg_shows_usage(fresh_db):
+    msg = make_message(user_id=1)
+    await cmd_source_raffle(msg, make_command(args=""))
+    assert "Укажи метку" in msg.answer.call_args[0][0]
+
+
+# ==================== cmd_raffle / on_raffle ====================
+
+async def _setup_raffle_guests(n: int) -> list[int]:
+    """Создаёт n подтверждённых онлайн-гостей с номерами розыгрыша."""
+    uids = []
+    for i in range(n):
+        uid = 9000 + i
+        await db.ensure_user(uid, f"rguest{i}")
+        await db.set_name(uid, f"Гость {i}")
+        await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+        await db.set_raffle_numbers(uid, [i + 1])
+        uids.append(uid)
+    return uids
+
+
+async def test_raffle_cmd_shows_preview(fresh_db):
+    await _setup_raffle_guests(5)
+    msg = make_message(user_id=9999, text="/raffle")
+
+    await cmd_raffle(msg)
+
+    msg.answer.assert_awaited_once()
+    text = msg.answer.call_args[0][0]
+    assert "розыгрыш" in text.lower()
+    assert "5" in text  # 5 участников
+
+
+async def test_raffle_no_participants(fresh_db):
+    msg = make_message(user_id=9999, text="/raffle")
+
+    await cmd_raffle(msg)
+
+    text = msg.answer.call_args[0][0]
+    assert "некому" in text.lower()
+
+
+async def test_raffle_picks_one_winner_no_consolation(fresh_db):
+    await _setup_raffle_guests(10)
+    bot = make_bot()
+
+    call = make_callback(data="raffle:run", user_id=9999)
+    call.message.edit_text = AsyncMock()
+
+    await on_raffle(call, bot)
+
+    # ровно 1 победитель получил поздравление
+    winner_calls = [
+        c for c in bot.send_message.await_args_list
+        if "выиграл" in (c.args[1] if len(c.args) > 1 else "")
+    ]
+    assert len(winner_calls) == 1
+    # утешительные больше не рассылаются (модель «1 запуск = 1 приз»)
+    loser_calls = [
+        c for c in bot.send_message.await_args_list
+        if "удача" in (c.args[1] if len(c.args) > 1 else "")
+    ]
+    assert len(loser_calls) == 0
+    # победитель записан в список выигравших
+    won = await db.get_meta("raffle_winner_ids")
+    assert str(winner_calls[0].args[0]) in (won or "")
+
+
+async def test_raffle_excludes_previous_winners(fresh_db):
+    """Три запуска среди трёх гостей → три разных победителя, четвёртый — пусто."""
+    await _setup_raffle_guests(3)
+    bot = make_bot()
+
+    for _ in range(3):
+        call = make_callback(data="raffle:run", user_id=9999)
+        call.message.edit_text = AsyncMock()
+        await on_raffle(call, bot)
+
+    winner_calls = [
+        c for c in bot.send_message.await_args_list
+        if "выиграл" in (c.args[1] if len(c.args) > 1 else "")
+    ]
+    winner_uids = [c.args[0] for c in winner_calls]
+    assert len(winner_uids) == 3
+    assert len(set(winner_uids)) == 3  # без повторов
+
+    # четвёртый запуск — участников не осталось
+    call = make_callback(data="raffle:run", user_id=9999)
+    call.message.edit_text = AsyncMock()
+    await on_raffle(call, bot)
+    call.answer.assert_awaited()  # показан alert «все разыграны»
+
+
+async def test_raffle_cancel(fresh_db):
+    call = make_callback(data="raffle:cancel", user_id=9999)
+    call.message.edit_reply_markup = AsyncMock()
+    bot = make_bot()
+
+    await on_raffle(call, bot)
+
+    bot.send_message.assert_not_awaited()
+    call.answer.assert_awaited()
+
+
+async def test_raffle_preview_shows_already_won(fresh_db):
+    uids = await _setup_raffle_guests(5)
+    await db.set_meta("raffle_winner_ids", str(uids[0]))  # один уже выиграл
+    msg = make_message(user_id=9999, text="/raffle")
+
+    await cmd_raffle(msg)
+
+    text = msg.answer.call_args[0][0]
+    assert "уже разыграно" in text.lower()
+    assert "4" in text  # осталось 4 из 5
+
+
+async def test_raffle_guest_with_2_tickets_has_2_chances(fresh_db):
+    """Гость с 2 билетами имеет 2 номера в пуле — пул считается корректно."""
+    uid = 9100
+    await db.ensure_user(uid, "rich")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_raffle_numbers(uid, [1, 2])
+
+    for i in range(5):
+        u = 9101 + i
+        await db.ensure_user(u, f"r{i}")
+        await db.set_order(u, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+        await db.set_raffle_numbers(u, [10 + i])
+
+    pool = await db.get_raffle_pool()
+    uid_counts = {}
+    for u, _ in pool:
+        uid_counts[u] = uid_counts.get(u, 0) + 1
+    assert uid_counts[uid] == 2  # у богатого гостя 2 шанса
 
 
 # ==================== on_admin_decision (confirm) ====================
@@ -97,6 +270,49 @@ async def test_confirm_assigns_sequential_raffle_numbers(fresh_db):
     assert nums0.isdisjoint(nums1)
 
 
+async def test_confirm_repeat_purchase_accumulates(fresh_db):
+    """Докупка: гость уже подтверждён, покупает ещё — номера копятся, qty растёт."""
+    uid = 1500
+    await db.ensure_user(uid, "repeatguest")
+    await db.set_name(uid, "Гость")
+    await db.set_order(uid, 2, "vnd", "400 000 ₫", db.STATUS_AWAITING_CONFIRMATION)
+
+    # первое подтверждение → 2 номера
+    call1 = make_callback(data=f"adm:confirm:{uid}", user_id=9999, username="adm")
+    call1.message.caption = "Card"
+    call1.message.edit_caption = AsyncMock()
+    bot1 = make_bot()
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.BOT_USERNAME", "bot"):
+        await on_admin_decision(call1, bot1)
+
+    reg = await db.get_registration(uid)
+    first_numbers = reg["raffle_numbers"].split(",")
+    assert len(first_numbers) == 2
+
+    # гость докупает 1 билет: воронка перезаписала qty и статус, номера сохранились
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_AWAITING_CONFIRMATION)
+
+    call2 = make_callback(data=f"adm:confirm:{uid}", user_id=9999, username="adm")
+    call2.message.caption = "Card"
+    call2.message.edit_caption = AsyncMock()
+    bot2 = make_bot()
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.BOT_USERNAME", "bot"):
+        await on_admin_decision(call2, bot2)
+
+    reg = await db.get_registration(uid)
+    nums = reg["raffle_numbers"].split(",")
+    assert len(nums) == 3                  # 2 старых + 1 докупленный
+    assert nums[:2] == first_numbers       # прежние номера на месте
+    assert reg["qty"] == 3                  # итоговое число билетов
+
+    # одно сообщение об обновлении заказа, без повторных меню/просьбы о заказе
+    bot2.send_message.assert_awaited_once()
+    sent = bot2.send_message.await_args_list[0].args[1]
+    assert "обновлён" in sent.lower()
+
+
 async def test_confirm_no_qr_without_bot_username(fresh_db):
     uid = 1002
     await db.ensure_user(uid, "user1002")
@@ -108,7 +324,8 @@ async def test_confirm_no_qr_without_bot_username(fresh_db):
     bot = make_bot()
 
     with patch("sheets.sync_registration", new=AsyncMock()), \
-         patch("config.BOT_USERNAME", ""):  # нет username → нет QR
+         patch("config.BOT_USERNAME", ""), \
+         patch("config.MENU_IMAGE", "/nonexistent/menu.jpg"):  # нет username → нет QR, нет меню
         await on_admin_decision(call, bot)
 
     # Подтверждение текстом есть, QR нет
@@ -165,6 +382,65 @@ async def test_reject_notifies_user(fresh_db):
     send_args = bot.send_message.call_args[0]
     assert send_args[0] == uid
     assert "подтвердить" in send_args[1].lower() or "скрин" in send_args[1].lower()
+
+
+# ==================== cmd_refund ====================
+
+async def test_refund_by_user_id_voids_ticket(fresh_db):
+    uid = 6001
+    await db.ensure_user(uid, "refundguest")
+    await db.set_name(uid, "Возвратный")
+    await db.set_order(uid, 2, "vnd", "400 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_raffle_numbers(uid, [5, 6])
+    await db.set_ticket_code(uid, "ABC123")
+    await db.add_arrival(uid, 1)
+
+    msg = make_message(user_id=9999, text=f"/refund {uid}")
+    with patch("sheets.sync_all", new=AsyncMock(return_value=1)):
+        await cmd_refund(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_REFUNDED
+    assert reg["qty"] == 0
+    assert reg["raffle_numbers"] is None
+    assert reg["ticket_code"] is None
+    assert reg["arrived_count"] is None
+    assert reg["checked_in_at"] is None
+    # место освобождено
+    assert await db.seats_taken() == 0
+    # QR больше не резолвится
+    assert await db.get_by_ticket_code("ABC123") is None
+    msg.answer.assert_awaited_once()
+
+
+async def test_refund_by_username(fresh_db):
+    uid = 6002
+    await db.ensure_user(uid, "IgorM7317")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    # регистронезависимо и с @
+    msg = make_message(user_id=9999, text="/refund @igorm7317")
+    with patch("sheets.sync_all", new=AsyncMock(return_value=1)):
+        await cmd_refund(msg)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_REFUNDED
+
+
+async def test_refund_no_arg_shows_usage(fresh_db):
+    msg = make_message(user_id=9999, text="/refund")
+    await cmd_refund(msg)
+    msg.answer.assert_awaited_once()
+    text = msg.answer.call_args[0][0]
+    assert "refund" in text.lower()
+
+
+async def test_refund_not_found(fresh_db):
+    msg = make_message(user_id=9999, text="/refund 424242")
+    with patch("sheets.sync_all", new=AsyncMock(return_value=1)):
+        await cmd_refund(msg)
+    text = msg.answer.call_args[0][0]
+    assert "не найден" in text.lower()
 
 
 # ==================== cmd_stats ====================
@@ -360,4 +636,59 @@ async def test_broadcast_segment_all(fresh_db):
     with patch("broadcast.broadcast", new=AsyncMock(return_value=(2, 0))):
         await on_broadcast_segment(call, bot)
 
+    assert uid_admin not in _pending_broadcast
+
+
+async def test_broadcast_segment_paid_targets_confirmed(fresh_db):
+    import segments
+    await db.ensure_user(5101, "u5101")
+    await db.set_order(5101, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.ensure_user(5102, "u5102")  # просто зашёл — не должен попасть
+
+    uid_admin = 5199
+    _pending_broadcast[uid_admin] = {"type": "text", "text": "Спасибо за оплату!"}
+
+    call = make_callback(data="bc:paid", user_id=uid_admin)
+    call.message.edit_reply_markup = AsyncMock()
+    call.message.answer = AsyncMock()
+    bot = make_bot()
+
+    captured = {}
+
+    async def fake_broadcast(b, uids, send_one):
+        captured["uids"] = list(uids)
+        return (len(uids), 0)
+
+    with patch("broadcast.broadcast", new=fake_broadcast):
+        await on_broadcast_segment(call, bot)
+
+    assert captured["uids"] == [5101]
+    assert uid_admin not in _pending_broadcast
+
+
+async def test_broadcast_segment_unpaid_targets_everyone_else(fresh_db):
+    await db.ensure_user(5201, "u5201")  # просто зашёл (new)
+    await db.ensure_user(5202, "u5202")
+    await db.set_order(5202, 1, "vnd", "x", db.STATUS_AWAITING_PAYMENT)
+    await db.ensure_user(5203, "u5203")
+    await db.set_order(5203, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)  # оплатил — не попадёт
+
+    uid_admin = 5299
+    _pending_broadcast[uid_admin] = {"type": "text", "text": "Ещё не поздно купить!"}
+
+    call = make_callback(data="bc:unpaid", user_id=uid_admin)
+    call.message.edit_reply_markup = AsyncMock()
+    call.message.answer = AsyncMock()
+    bot = make_bot()
+
+    captured = {}
+
+    async def fake_broadcast(b, uids, send_one):
+        captured["uids"] = list(uids)
+        return (len(uids), 0)
+
+    with patch("broadcast.broadcast", new=fake_broadcast):
+        await on_broadcast_segment(call, bot)
+
+    assert set(captured["uids"]) == {5201, 5202}
     assert uid_admin not in _pending_broadcast

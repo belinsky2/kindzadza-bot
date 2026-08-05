@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import config
 import db
+import texts
 from handlers.registration import (
     cmd_start,
     cmd_status,
+    cmd_reset,
     on_register,
     on_name,
     on_qty,
@@ -16,8 +18,10 @@ from handlers.registration import (
     on_pay,
     on_screenshot,
     on_screenshot_wrong,
+    on_screenshot_stateless,
     on_to_online,
     on_resend,
+    on_free_text,
     Form,
 )
 from tests.conftest import make_message, make_callback, make_state, make_command, make_bot
@@ -36,9 +40,9 @@ async def test_start_new_user_no_image(fresh_db):
         await cmd_start(msg, state, cmd, bot)
 
     state.clear.assert_awaited_once()
-    msg.answer.assert_awaited_once()
-    call_text = msg.answer.call_args[0][0]
-    assert "Зарегистрироваться" in call_text or msg.answer.called
+    bot.send_message.assert_awaited_once()
+    call_text = bot.send_message.call_args[0][1]
+    assert config.BRAND_NAME in call_text
 
 
 async def test_start_new_user_with_image(fresh_db):
@@ -52,7 +56,53 @@ async def test_start_new_user_with_image(fresh_db):
          patch("handlers.registration.FSInputFile", return_value=MagicMock()):
         await cmd_start(msg, state, cmd, bot)
 
-    msg.answer_photo.assert_awaited_once()
+    # Приветствие короткое (≤1024) → фото с подписью одним сообщением
+    bot.send_photo.assert_awaited_once()
+
+
+async def test_start_copies_saved_announce_post(fresh_db):
+    """Если админ сохранил пост через /set_announce — /start копирует его целиком."""
+    await db.set_meta("announce_src_chat", "-100555")
+    await db.set_meta("announce_src_msg", "42")
+
+    msg = make_message(user_id=7, username="newbie")
+    state = make_state()
+    cmd = make_command(args="")
+    bot = make_bot()
+
+    await cmd_start(msg, state, cmd, bot)
+
+    bot.copy_message.assert_awaited_once()
+    args, kwargs = bot.copy_message.call_args
+    # копируем из сохранённого чата/сообщения в чат пользователя
+    assert args[1] == -100555
+    assert args[2] == 42
+    assert kwargs.get("reply_markup") is not None
+    # запасной текстовый анонс при этом не отправляется
+    bot.send_message.assert_not_awaited()
+
+
+async def test_start_records_source_from_deeplink(fresh_db):
+    """/start flyer сохраняет канал привлечения гостю."""
+    msg = make_message(user_id=90, username="lead")
+    with patch("os.path.exists", return_value=False):
+        await cmd_start(msg, make_state(), make_command(args="Flyer!"), make_bot())
+
+    reg = await db.get_registration(90)
+    assert reg["source"] == "flyer"  # нормализовано в нижний регистр, спецсимволы убраны
+
+
+async def test_source_is_first_touch(fresh_db):
+    """Источник фиксируется по первому переходу и не перезатирается."""
+    uid = 91
+    with patch("os.path.exists", return_value=False):
+        await cmd_start(make_message(user_id=uid, username="l"), make_state(),
+                        make_command(args="flyer"), make_bot())
+        await cmd_start(make_message(user_id=uid, username="l"), make_state(),
+                        make_command(args="insta"), make_bot())
+
+    reg = await db.get_registration(uid)
+    assert reg["source"] == "flyer"
 
 
 async def test_start_returning_awaiting_payment(fresh_db):
@@ -163,7 +213,7 @@ async def test_start_new_status_shows_greeting(fresh_db):
     with patch("os.path.exists", return_value=False):
         await cmd_start(msg, state, cmd, bot)
 
-    msg.answer.assert_awaited_once()
+    bot.send_message.assert_awaited_once()
 
 
 # ==================== /status ====================
@@ -200,6 +250,43 @@ async def test_status_awaiting_confirmation(fresh_db):
 
     text = msg.answer.call_args[0][0]
     assert "Скрин получен" in text or "закреплено" in text
+
+
+# ==================== /reset ====================
+
+async def test_reset_clears_registration(fresh_db):
+    uid = 150
+    await db.ensure_user(uid, "resetme")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, username="resetme")
+    state = make_state()
+    await cmd_reset(msg, state)
+
+    state.clear.assert_awaited_once()
+    assert await db.get_registration(uid) is None
+    msg.answer.assert_awaited_once()
+
+
+async def test_reset_then_start_shows_greeting(fresh_db):
+    """После /reset пользователь снова видит приветствие, а не статус."""
+    uid = 151
+    await db.ensure_user(uid, "again")
+    await db.set_order(uid, 1, "door", "x", db.STATUS_DOOR)
+
+    # сброс
+    state = make_state()
+    await cmd_reset(make_message(user_id=uid, username="again"), state)
+
+    # /start заново
+    msg = make_message(user_id=uid, username="again")
+    cmd = make_command(args="")
+    bot = make_bot()
+    with patch("os.path.exists", return_value=False):
+        await cmd_start(msg, make_state(), cmd, bot)
+
+    text = bot.send_message.call_args[0][1]
+    assert config.BRAND_NAME in text  # приветствие, не статус
 
 
 # ==================== on_register ====================
@@ -436,6 +523,43 @@ async def test_pay_rub_online_available(fresh_db):
     assert reg["amount"] == "1 300 ₽"
 
 
+async def test_switch_method_while_waiting_screenshot(fresh_db):
+    """Гость выбрал донги (ждём скрин) и меняет способ на рубли старой кнопкой."""
+    uid = 520
+    await db.ensure_user(uid, "switcher")
+    await db.set_name(uid, "Switcher")
+    # уже выбрал онлайн-донги, ждём скрин
+    await db.set_order(uid, 2, "vnd", "400 000 ₫", db.STATUS_AWAITING_PAYMENT)
+
+    call = make_callback(data="pay:rub", user_id=uid)
+    state = make_state(data={})  # состояние без qty — берём из брони
+
+    with patch("segments.is_sold_out", new=AsyncMock(return_value=False)):
+        await on_pay(call, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["payment_method"] == "rub"
+    assert reg["amount"] == "1 300 ₽"  # 2 × 650
+
+
+async def test_pay_blocked_after_confirmation(fresh_db):
+    """После отправки скрина (awaiting_confirmation) кнопки оплаты заблокированы."""
+    uid = 521
+    await db.ensure_user(uid, "paid")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_AWAITING_CONFIRMATION)
+
+    call = make_callback(data="pay:rub", user_id=uid)
+    state = make_state(data={})
+
+    await on_pay(call, state)
+
+    reg = await db.get_registration(uid)
+    # способ не изменился, показан alert
+    assert reg["payment_method"] == "vnd"
+    call.answer.assert_awaited()
+    assert call.answer.call_args.kwargs.get("show_alert") is True
+
+
 async def test_pay_usdt_online_available(fresh_db):
     uid = 503
     await db.ensure_user(uid, "user503")
@@ -477,6 +601,24 @@ async def test_pay_door_calculates_amount_correctly(fresh_db):
 
     reg = await db.get_registration(uid)
     assert reg["amount"] == "600 000 ₫"
+
+
+async def test_pay_door_notifies_admin_group(fresh_db, monkeypatch):
+    """Бронь «оплата на месте» уходит карточкой в админ-группу."""
+    monkeypatch.setattr(config, "ADMIN_GROUP_ID", -100999)
+    uid = 506
+    await db.ensure_user(uid, "user506")
+    await db.set_name(uid, "Door Guest")
+    call = make_callback(data="pay:door", user_id=uid)
+    state = make_state(data={"qty": 3})
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_pay(call, state)
+
+    call.message.bot.send_message.assert_awaited_once()
+    args, kwargs = call.message.bot.send_message.call_args
+    assert args[0] == -100999
+    assert "оплата на месте" in args[1].lower()
 
 
 # ==================== on_screenshot ====================
@@ -549,6 +691,67 @@ async def test_screenshot_wrong_type_asks_again(fresh_db):
     msg.answer.assert_awaited_once()
 
 
+# ==================== on_screenshot_stateless (после рестарта) ====================
+
+async def test_stateless_screenshot_awaiting_payment_accepted(fresh_db):
+    """Скрин без FSM-состояния от ждущего оплаты — принимается и уходит оргам."""
+    uid = 620
+    await db.ensure_user(uid, "user620")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_AWAITING_PAYMENT)
+
+    photo_mock = [MagicMock()]
+    photo_mock[-1].file_id = "ph_id"
+    msg = make_message(user_id=uid, username="user620", photo=photo_mock)
+    state = make_state()
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_screenshot_stateless(msg, state, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_AWAITING_CONFIRMATION
+    bot.send_photo.assert_awaited_once()
+    msg.answer.assert_awaited_once()
+
+
+async def test_stateless_screenshot_rejected_accepted(fresh_db):
+    uid = 621
+    await db.ensure_user(uid, "user621")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_REJECTED)
+
+    doc_mock = MagicMock()
+    doc_mock.file_id = "doc_id"
+    msg = make_message(user_id=uid, username="user621", photo=None, document=doc_mock)
+    state = make_state()
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()):
+        await on_screenshot_stateless(msg, state, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_AWAITING_CONFIRMATION
+
+
+async def test_stateless_screenshot_confirmed_ignored(fresh_db):
+    """Фото от уже подтверждённого гостя не трактуется как новый скрин."""
+    uid = 622
+    await db.ensure_user(uid, "user622")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    photo_mock = [MagicMock()]
+    photo_mock[-1].file_id = "ph_id"
+    msg = make_message(user_id=uid, username="user622", photo=photo_mock)
+    state = make_state()
+    bot = make_bot()
+
+    await on_screenshot_stateless(msg, state, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE  # без изменений
+    bot.send_photo.assert_not_awaited()
+    msg.answer.assert_not_awaited()
+
+
 # ==================== on_to_online / on_resend ====================
 
 async def test_to_online_goes_to_payment_choice(fresh_db):
@@ -576,3 +779,146 @@ async def test_resend_sets_waiting_screenshot_state(fresh_db):
     call.answer.assert_awaited()
     state.set_state.assert_awaited_once_with(Form.waiting_screenshot)
     call.message.answer.assert_awaited_once()
+
+
+# ==================== on_free_text (заказ еды) ====================
+
+async def test_free_text_saves_order_for_paid(fresh_db):
+    uid = 800
+    await db.ensure_user(uid, "u800")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, text="2 хачапури и лимонад")
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", 0):
+        await on_free_text(msg, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["food_order"] == "2 хачапури и лимонад"
+    msg.answer.assert_awaited_once()
+
+
+async def test_free_text_appends_multiple_orders(fresh_db):
+    uid = 801
+    await db.ensure_user(uid, "u801")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", 0):
+        await on_free_text(make_message(user_id=uid, text="хачапури"), bot)
+        await on_free_text(make_message(user_id=uid, text="и вино"), bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["food_order"] == "хачапури\nи вино"
+
+
+async def test_free_text_door_guest_saves_order(fresh_db):
+    uid = 802
+    await db.ensure_user(uid, "u802")
+    await db.set_order(uid, 1, "door", "300 000 ₫", db.STATUS_DOOR)
+
+    msg = make_message(user_id=uid, text="шашлык")
+    bot = make_bot()
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", 0):
+        await on_free_text(msg, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["food_order"] == "шашлык"
+
+
+async def test_free_text_unregistered_gets_hint(fresh_db):
+    uid = 803
+    await db.ensure_user(uid, "u803")  # статус new
+
+    msg = make_message(user_id=uid, text="привет")
+    bot = make_bot()
+    await on_free_text(msg, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg.get("food_order") is None
+    msg.answer.assert_awaited_once()
+
+
+async def test_free_text_ignores_unknown_command(fresh_db):
+    uid = 804
+    await db.ensure_user(uid, "u804")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, text="/foobar")
+    bot = make_bot()
+    await on_free_text(msg, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg.get("food_order") is None
+    msg.answer.assert_not_awaited()
+
+
+async def test_free_text_notifies_admin_group(fresh_db):
+    uid = 805
+    await db.ensure_user(uid, "u805")
+    await db.set_order(uid, 1, "vnd", "200 000 ₫", db.STATUS_CONFIRMED_ONLINE)
+
+    msg = make_message(user_id=uid, text="люля-кебаб")
+    bot = make_bot()
+
+    with patch("sheets.sync_registration", new=AsyncMock()), \
+         patch("config.ADMIN_GROUP_ID", -100500):
+        await on_free_text(msg, bot)
+
+    bot.send_message.assert_awaited_once()
+    call_args = bot.send_message.call_args[0]
+    assert call_args[0] == -100500
+    assert "люля-кебаб" in call_args[1]
+
+
+# ==================== Бесплатное событие (FREE_EVENT) ====================
+
+async def test_free_event_qty_registers_without_payment(fresh_db):
+    """FREE_EVENT: выбор кол-ва сразу подтверждает бронь и выдаёт QR (без оплаты)."""
+    uid = 900
+    await db.ensure_user(uid, "free_guest")
+    await db.set_name(uid, "Гость")
+
+    call = make_callback(data="qty:2", user_id=uid, username="free_guest")
+    state = make_state()
+
+    with patch("config.FREE_EVENT", True), \
+         patch("sheets.sync_registration", new=AsyncMock()):
+        await on_qty(call, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE
+    assert reg["qty"] == 2
+    assert reg["payment_method"] == "free"
+    assert reg["ticket_code"]  # QR-код выдан
+    state.clear.assert_awaited()
+
+
+async def test_free_event_greeting_is_show_za_stolom(fresh_db):
+    """FREE_EVENT: анонс — про «Шоу за столом», без упоминания оплаты."""
+    with patch("config.FREE_EVENT", True):
+        text = texts.greeting_announce()
+    assert "Шоу за столом" in text
+    assert "оплат" not in text.lower()
+
+
+async def test_free_event_custom_qty_registers(fresh_db):
+    """FREE_EVENT: ручной ввод кол-ва тоже регистрирует без оплаты."""
+    uid = 901
+    await db.ensure_user(uid, "free_guest2")
+    await db.set_name(uid, "Гость2")
+
+    msg = make_message(user_id=uid, username="free_guest2", text="3")
+    state = make_state()
+
+    with patch("config.FREE_EVENT", True), \
+         patch("sheets.sync_registration", new=AsyncMock()):
+        await on_qty_custom(msg, state)
+
+    reg = await db.get_registration(uid)
+    assert reg["status"] == db.STATUS_CONFIRMED_ONLINE
+    assert reg["qty"] == 3

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import config
 import db
-from handlers.checkin import process_scan, on_checkin, is_staff
+from handlers.checkin import process_scan, on_checkin, on_send_to_kitchen, is_staff
 from tests.conftest import make_message, make_callback, make_bot
 
 
@@ -123,6 +123,149 @@ async def test_process_scan_staff_sees_checkin_card(fresh_db, monkeypatch):
     # Карточка с кнопками
     call_kwargs = msg.answer.call_args[1]
     assert "reply_markup" in call_kwargs
+
+
+async def test_process_scan_shows_food_order_for_kitchen(fresh_db, monkeypatch):
+    uid = 410
+    await db.ensure_user(uid, "foodguest")
+    await db.set_name(uid, "Гость")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "FOOD_CODE")
+    await db.append_food_order(uid, "2 хачапури, люля")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_USERNAME", "reap_of_dea")
+
+    msg = make_message(user_id=9999, username="organizer")
+    bot = make_bot()
+
+    await process_scan(msg, bot, "FOOD_CODE")
+
+    # два сообщения: карточка check-in + заказ с кнопкой «Отправить на кухню»
+    assert msg.answer.await_count == 2
+    card_text = msg.answer.await_args_list[0].args[0]
+    assert "кухн" in card_text.lower()  # инструкция про отправку на кухню
+    order_call = msg.answer.await_args_list[1]
+    assert "хачапури" in order_call.args[0]
+    assert "reply_markup" in order_call.kwargs  # кнопка отправки
+
+
+async def test_process_scan_no_food_order_no_extra_message(fresh_db, monkeypatch):
+    uid = 411
+    await db.ensure_user(uid, "nofood")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "NOFOOD_CODE")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+
+    msg = make_message(user_id=9999, username="org")
+    bot = make_bot()
+
+    await process_scan(msg, bot, "NOFOOD_CODE")
+
+    msg.answer.assert_awaited_once()
+
+
+async def test_process_scan_rescan_no_food_reminder(fresh_db, monkeypatch):
+    """На повторном скане (опоздавшие) заказ еды повторно не показываем."""
+    uid = 412
+    await db.ensure_user(uid, "latefood")
+    await db.set_order(uid, 3, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "LATE_CODE")
+    await db.append_food_order(uid, "хинкали")
+    await db.add_arrival(uid, 1)  # один уже пришёл → arrived=1
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+
+    msg = make_message(user_id=9999, username="org")
+    bot = make_bot()
+
+    await process_scan(msg, bot, "LATE_CODE")
+
+    # только карточка, без второго сообщения и без напоминания про кухню
+    msg.answer.assert_awaited_once()
+    card_text = msg.answer.await_args_list[0].args[0]
+    assert "reap_of_dea" not in card_text
+
+
+# ==================== on_send_to_kitchen ====================
+
+async def test_send_to_kitchen_resolves_username(fresh_db, monkeypatch):
+    # Артур запустил бота → есть его запись
+    await db.ensure_user(7001, "reap_of_dea")
+    uid = 420
+    await db.ensure_user(uid, "g420")
+    await db.set_name(uid, "Гость")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.append_food_order(uid, "хачапури, люля")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_CHAT_ID", 0)
+    monkeypatch.setattr(config, "KITCHEN_USERNAME", "reap_of_dea")
+
+    call = make_callback(data=f"kit:{uid}", user_id=9999, username="org")
+    call.message.text = "🍽 Заказ еды ..."
+    call.message.edit_text = AsyncMock()
+    bot = make_bot()
+
+    await on_send_to_kitchen(call, bot)
+
+    bot.send_message.assert_awaited_once()
+    assert bot.send_message.await_args.args[0] == 7001  # ушло Артуру
+    assert "хачапури" in bot.send_message.await_args.args[1]
+    call.answer.assert_awaited()
+
+
+async def test_send_to_kitchen_explicit_chat_id(fresh_db, monkeypatch):
+    uid = 421
+    await db.ensure_user(uid, "g421")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.append_food_order(uid, "хинкали")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_CHAT_ID", -100777)  # кухонная группа
+
+    call = make_callback(data=f"kit:{uid}", user_id=9999, username="org")
+    call.message.text = "order"
+    call.message.edit_text = AsyncMock()
+    bot = make_bot()
+
+    await on_send_to_kitchen(call, bot)
+
+    assert bot.send_message.await_args.args[0] == -100777
+
+
+async def test_send_to_kitchen_not_configured(fresh_db, monkeypatch):
+    uid = 422
+    await db.ensure_user(uid, "g422")
+    await db.set_order(uid, 1, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.append_food_order(uid, "лобио")
+
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    monkeypatch.setattr(config, "KITCHEN_CHAT_ID", 0)
+    monkeypatch.setattr(config, "KITCHEN_USERNAME", "")  # никого не знаем
+
+    call = make_callback(data=f"kit:{uid}", user_id=9999, username="org")
+    bot = make_bot()
+
+    await on_send_to_kitchen(call, bot)
+
+    bot.send_message.assert_not_awaited()
+    call.answer.assert_awaited()
+    assert call.answer.call_args[1].get("show_alert") is True
+
+
+async def test_send_to_kitchen_non_staff_denied(fresh_db, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_IDS", set())
+    monkeypatch.setattr(config, "ADMIN_GROUP_ID", -100999)
+
+    call = make_callback(data="kit:420", user_id=555)
+    bot = make_bot(is_staff=False)
+
+    await on_send_to_kitchen(call, bot)
+
+    bot.send_message.assert_not_awaited()
+    assert call.answer.call_args[1].get("show_alert") is True
 
 
 async def test_process_scan_already_checked_in(fresh_db, monkeypatch):
@@ -255,6 +398,74 @@ async def test_checkin_prevents_double_scan(fresh_db, monkeypatch):
 
     answer_text = call2.answer.call_args[0][0]
     assert "отмечен" in answer_text.lower() or "уже" in answer_text.lower()
+
+
+# ==================== Накопительная отметка (докопка прихода) ====================
+
+async def test_checkin_partial_then_complete(fresh_db, monkeypatch):
+    """3 из 4 пришли сразу, потом 1 опоздавший по тому же QR → все на месте."""
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    uid = 710
+    await db.ensure_user(uid, "guest710")
+    await db.set_order(uid, 4, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "PARTIAL2_CODE")
+
+    # пришли 3
+    call1 = make_callback(data="ci:PARTIAL2_CODE:3", user_id=9999)
+    call1.message.edit_text = AsyncMock()
+    bot = make_bot()
+    await on_checkin(call1, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["arrived_count"] == 3  # частично
+
+    # опоздавший показывает тот же QR — карточка показывает остаток
+    msg = make_message(user_id=9999, username="org")
+    await process_scan(msg, bot, "PARTIAL2_CODE")
+    card = msg.answer.call_args[0][0]
+    assert "Осталось отметить" in card
+
+    # отмечаем последнего
+    call2 = make_callback(data="ci:PARTIAL2_CODE:1", user_id=9999)
+    call2.message.edit_text = AsyncMock()
+    await on_checkin(call2, bot)
+
+    reg = await db.get_registration(uid)
+    assert reg["arrived_count"] == 4  # все пришли
+    done_text = call2.message.edit_text.call_args[0][0]
+    assert "Все на месте" in done_text
+
+
+async def test_checkin_rescan_after_full_shows_extra_pay(fresh_db, monkeypatch):
+    """После полной отметки повторный скан → 'оплата на месте'."""
+    monkeypatch.setattr(config, "ADMIN_IDS", {9999})
+    uid = 711
+    await db.ensure_user(uid, "guest711")
+    await db.set_order(uid, 2, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+    await db.set_ticket_code(uid, "FULL_CODE")
+
+    call = make_callback(data="ci:FULL_CODE:2", user_id=9999)
+    call.message.edit_text = AsyncMock()
+    bot = make_bot()
+    await on_checkin(call, bot)  # все 2 пришли
+
+    msg = make_message(user_id=9999, username="org")
+    await process_scan(msg, bot, "FULL_CODE")
+    text = msg.answer.call_args[0][0]
+    assert "уже" in text.lower()
+    assert "на месте" in text.lower()
+
+
+async def test_add_arrival_caps_at_qty(fresh_db):
+    uid = 712
+    await db.ensure_user(uid, "guest712")
+    await db.set_order(uid, 3, "vnd", "x", db.STATUS_CONFIRMED_ONLINE)
+
+    assert await db.add_arrival(uid, 2) == 2
+    # пытаемся добавить ещё 5 — потолок qty=3
+    assert await db.add_arrival(uid, 5) == 3
+    reg = await db.get_registration(uid)
+    assert reg["arrived_count"] == 3
 
 
 # ==================== Интеграция: полный цикл регистрации и check-in ====================

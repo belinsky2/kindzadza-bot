@@ -1,0 +1,17 @@
+[Unit]
+Description=Kindzadza Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kindzadza-bot
+ExecStart=/opt/kindzadza-bot/.venv/bin/python /opt/kindzadza-bot/main.py
+Restart=always
+RestartSec=5
+# Перезапуск при падении, но не чаще 5 раз за минуту (защита от циклов)
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

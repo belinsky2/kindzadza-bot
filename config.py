@@ -30,7 +30,13 @@ def _bool(name: str, default: bool) -> bool:
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_GROUP_ID: int = _int("ADMIN_GROUP_ID", 0)
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "").strip().lstrip("@")
-ORGANIZER_USERNAME: str = os.getenv("ORGANIZER_USERNAME", "").strip().lstrip("@")
+# Контакт для кнопки «Связаться с организатором» (без @). Задаётся в коде.
+ORGANIZER_USERNAME: str = "qweupvk"
+# Ник того, кому билетер пересылает заказ еды на кухню (без @).
+KITCHEN_USERNAME: str = os.getenv("KITCHEN_USERNAME", "reap_of_dea").strip().lstrip("@")
+# Чат/пользователь, куда уходит заказ по кнопке «Отправить на кухню».
+# 0 → бот найдёт chat_id по KITCHEN_USERNAME (Артур должен был запустить бота).
+KITCHEN_CHAT_ID: int = _int("KITCHEN_CHAT_ID", 0)
 # Доп. список user_id оргов для check-in (через запятую). Необязательно —
 # по умолчанию права определяются членством в ADMIN_GROUP_ID.
 ADMIN_IDS: set[int] = {
@@ -40,35 +46,49 @@ ADMIN_IDS: set[int] = {
 # --- Google Sheets (опционально; без креды — no-op) ---
 GOOGLE_CREDENTIALS_FILE: str = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json").strip()
 SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "").strip()
+# Префикс имён листов Google Sheets. Задаётся под текущее событие прямо здесь
+# (не из .env), чтобы менять мероприятие правкой кода, а не конфига на сервере.
+SHEET_TAG: str = "31.07"
 
 # --- Время / таймзона ---
 TZ_NAME: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh").strip()
 TZ = ZoneInfo(TZ_NAME)
 
 # --- Мероприятие ---
-EVENT_DATE: str = os.getenv("EVENT_DATE", "13 июня").strip()
-EVENT_TIME: str = os.getenv("EVENT_TIME", "20:00").strip()
-DOORS_TIME: str = os.getenv("DOORS_TIME", "19:30").strip()
-EVENT_LOCATION: str = os.getenv("EVENT_LOCATION", "(локация уточняется)").strip()
-EVENT_MAP_URL: str = os.getenv("EVENT_MAP_URL", "").strip()
+# Имя шоу — используется в текстах бота (напоминания, заглушка и т.п.).
+BRAND_NAME: str = "Стендап в Нячанге"
+# Задаётся под текущее событие прямо здесь (не из .env): «Прожарка», 31 июля, Кинзадза.
+EVENT_DATE: str = "31 июля"
+EVENT_TIME: str = "21:00"
+DOORS_TIME: str = "20:00"
+EVENT_LOCATION: str = "Ресторан «Кинзадза», Нячанг"
+EVENT_MAP_URL: str = "https://maps.app.goo.gl/yqCCbWtx5zYamNESA"
 
 # --- Лимит мест и дефицит ---
 EVENT_CAPACITY: int = _int("EVENT_CAPACITY", 60)
 SEATS_REVEAL_THRESHOLD: int = _int("SEATS_REVEAL_THRESHOLD", 15)
 MAX_TICKETS_PER_ORDER: int = _int("MAX_TICKETS_PER_ORDER", 10)
 
+# --- Режим бесплатного входа (регистрация без оплаты, только бронь места) ---
+# Задаётся прямо здесь (не из .env). «Хинкали и Вино» — платное событие → False.
+FREE_EVENT: bool = False
+
 # --- Рассылка / посты ---
 DAILY_POST_TIME: str = os.getenv("DAILY_POST_TIME", "10:00").strip()  # HH:MM по TZ
 CONFIRM_SLA: str = os.getenv("CONFIRM_SLA", "пары часов").strip()
 BROADCAST_RATE: int = _int("BROADCAST_RATE", 25)  # сообщений в секунду (лимит Telegram ~30)
 
-# --- Напоминания (cron: дата+время по TZ) ---
-REMINDER_EVE: str = os.getenv("REMINDER_EVE", "2026-06-12 20:00").strip()
-REMINDER_DAY: str = os.getenv("REMINDER_DAY", "2026-06-13 12:00").strip()
+# --- Напоминания оргам (дата+время по TZ). Задаются под событие здесь, не из .env. ---
+# Бот НЕ шлёт напоминания гостям автоматически. В эти моменты он лишь пингует
+# админ-группу («пора напомнить гостям»), а рассылку орги делают вручную (/broadcast).
+REMINDER_EVE: str = "2026-07-30 20:00"  # вечер накануне
+REMINDER_DAY: str = "2026-07-31 12:00"  # днём в день концерта
+# Кого тегать в напоминании оргам (ответственный за рассылку).
+REMINDER_MENTION: str = "@diuniverse"
 
 # --- Ссылки ---
 TG_LINK: str = os.getenv("TG_LINK", "").strip()
-INSTA_LINK: str = os.getenv("INSTA_LINK", "").strip()
+INSTA_LINK: str = os.getenv("INSTA_LINK", "https://www.instagram.com/aram_belinsky").strip()
 BOT_LINK: str = os.getenv("BOT_LINK", "").strip()  # для CTA в постах
 
 # --- Реквизиты оплаты (текст показывается пользователю) ---
@@ -93,7 +113,18 @@ ONLINE_METHODS = [k for k, v in PAYMENT_METHODS.items() if v["online"]]
 DB_PATH: str = os.getenv("DB_PATH", "bot.db").strip()
 CONTENT_DIR: str = os.getenv("CONTENT_DIR", "content").strip()
 ANNOUNCE_IMAGE: str = os.path.join(CONTENT_DIR, "announce.jpg")
+MENU_IMAGE: str = os.path.join(CONTENT_DIR, "menu.jpg")
+# Ссылка на онлайн-меню (шлётся после оплаты вместо фото). Пусто → используем фото menu.jpg.
+MENU_URL: str = ""
+PAYMENT_QR_VND: str = os.path.join(CONTENT_DIR, "payment_qr_vnd.jpg")
+PAYMENT_QR_USDT: str = os.path.join(CONTENT_DIR, "payment_qr_usdt.jpg")
 POSTS_DIR: str = os.path.join(CONTENT_DIR, "posts")
+
+# Картинка-QR для способа оплаты (отправляется после реквизитов, если файл есть)
+PAYMENT_QR_IMAGE = {
+    "vnd": PAYMENT_QR_VND,
+    "usdt": PAYMENT_QR_USDT,
+}
 
 
 def format_amount(method: str, qty: int = 1) -> str:

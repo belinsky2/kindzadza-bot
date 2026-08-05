@@ -17,9 +17,10 @@ def _contact_button() -> InlineKeyboardButton | None:
     )
 
 
-def register_kb() -> InlineKeyboardMarkup:
+def register_kb(sold_out: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="✍️ Зарегистрироваться", callback_data="register")
+    if not sold_out:
+        kb.button(text="✍️ Зарегистрироваться", callback_data="register")
     contact = _contact_button()
     if contact:
         kb.row(contact)
@@ -27,16 +28,17 @@ def register_kb() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def returning_kb(status: str) -> InlineKeyboardMarkup:
+def returning_kb(status: str, sold_out: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    if status == db.STATUS_AWAITING_PAYMENT:
-        kb.button(text="💳 Завершить оплату", callback_data="register")
-    elif status == db.STATUS_REJECTED:
-        kb.button(text="📸 Прислать скрин заново", callback_data="register")
-    elif status == db.STATUS_DOOR:
-        kb.button(text="💳 Оплатить онлайн", callback_data="register")
-    else:
-        kb.button(text="🎟 Купить ещё билеты", callback_data="register")
+    if not sold_out:
+        if status == db.STATUS_AWAITING_PAYMENT:
+            kb.button(text="💳 Завершить оплату", callback_data="register")
+        elif status == db.STATUS_REJECTED:
+            kb.button(text="📸 Прислать скрин заново", callback_data="register")
+        elif status == db.STATUS_DOOR:
+            kb.button(text="💳 Оплатить онлайн", callback_data="register")
+        elif status == db.STATUS_CONFIRMED_ONLINE and not config.FREE_EVENT:
+            kb.button(text="🎟 Купить ещё билеты", callback_data="register")
     contact = _contact_button()
     if contact:
         kb.row(contact)
@@ -57,8 +59,14 @@ def payment_kb(sold_out: bool) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     if not sold_out:
         for key in config.ONLINE_METHODS:
-            kb.button(text=config.PAYMENT_METHODS[key]["label"], callback_data=f"pay:{key}")
-    kb.button(text=config.PAYMENT_METHODS["door"]["label"], callback_data="pay:door")
+            m = config.PAYMENT_METHODS[key]
+            label = f"{m['label']}  ·  {config.format_amount(key, 1)}"
+            kb.button(text=label, callback_data=f"pay:{key}")
+    door = config.PAYMENT_METHODS["door"]
+    kb.button(
+        text=f"{door['label']}  ·  {config.format_amount('door', 1)}",
+        callback_data="pay:door",
+    )
     contact = _contact_button()
     if contact:
         kb.row(contact)
@@ -102,10 +110,13 @@ def admin_confirm_kb(user_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def checkin_arrived_kb(code: str, qty: int) -> InlineKeyboardMarkup:
-    """Кнопки 'сколько пришло': 1..qty (до 10)."""
+def checkin_arrived_kb(code: str, remaining: int) -> InlineKeyboardMarkup:
+    """Кнопки 'сколько пришло сейчас': 1..remaining (до 10).
+
+    remaining – сколько ещё осталось отметить (qty минус уже пришедшие).
+    """
     kb = InlineKeyboardBuilder()
-    n = min(qty, 10)
+    n = min(remaining, 10)
     if n == 1:
         kb.button(text="✅ Пришёл (1)", callback_data=f"ci:{code}:1")
     else:
@@ -115,12 +126,53 @@ def checkin_arrived_kb(code: str, qty: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def raffle_confirm_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🎰 Запустить розыгрыш!", callback_data="raffle:run")
+    kb.button(text="Отмена", callback_data="raffle:cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def kitchen_send_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Кнопка билетера: отправить заказ еды на кухню."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🍽 Отправить на кухню", callback_data=f"kit:{user_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def announce_confirm_kb() -> InlineKeyboardMarkup:
+    """Выбор сегмента для рассылки анонса."""
+    if config.FREE_EVENT:
+        paid_label = "✅ Забронировали"
+        unpaid_label = "❌ Не забронировали"
+    else:
+        paid_label = "✅ Купили онлайн"
+        unpaid_label = "❌ Не купили"
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🧪 Только мне (тест)", callback_data="ann:me")
+    kb.button(text=unpaid_label, callback_data="ann:unpaid")
+    kb.button(text=paid_label, callback_data="ann:paid")
+    kb.button(text="📣 Всем", callback_data="ann:all")
+    kb.button(text="Отмена", callback_data="ann:cancel")
+    kb.adjust(1, 2, 1, 1)
+    return kb.as_markup()
+
+
+def reset_event_confirm_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔄 Да, сбросить под новое событие", callback_data="rev:do")
+    kb.button(text="Отмена", callback_data="rev:cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def broadcast_segment_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="A · Не оплатили", callback_data="bc:A")
-    kb.button(text="B · На месте", callback_data="bc:B")
-    kb.button(text="C · Оплатили", callback_data="bc:C")
+    kb.button(text="✅ Купили онлайн", callback_data="bc:paid")
+    kb.button(text="❌ Не купили", callback_data="bc:unpaid")
     kb.button(text="Все", callback_data="bc:all")
     kb.button(text="Отмена", callback_data="bc:cancel")
-    kb.adjust(2, 2, 1)
+    kb.adjust(2, 2)
     return kb.as_markup()

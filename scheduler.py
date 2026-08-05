@@ -13,7 +13,11 @@ import broadcast
 import config
 import db
 import segments
+import sheets
 import texts
+
+# Ключ meta-записи для пересылки отзывов в админ-группу
+FEEDBACK_META_KEY = "feedback_active"
 
 log = logging.getLogger(__name__)
 
@@ -21,9 +25,7 @@ log = logging.getLogger(__name__)
 # ---------- Ежедневный пост ----------
 
 async def _send_post_to(bot: Bot, uid: int, post: dict, scarcity: str | None) -> None:
-    reg = await db.get_registration(uid)
-    seg = segments.segment_of(reg["status"]) if reg else None
-    caption = (post["caption"] or "") + texts.post_cta(seg, scarcity)
+    caption = post["caption"] or ""
     fp = post["file_path"]
     if fp:
         photo = FSInputFile(fp) if os.path.exists(fp) else fp  # путь или file_id
@@ -50,26 +52,30 @@ async def publish_next_post(bot: Bot) -> dict | None:
     return {"post": post, "sent": sent, "failed": failed}
 
 
-# ---------- Напоминания ----------
-
-async def _send_segment(bot: Bot, segment: str, text: str) -> tuple[int, int]:
-    uids = await segments.user_ids_for_segment(segment)
-
-    async def send_one(b: Bot, uid: int) -> None:
-        await b.send_message(uid, text, disable_web_page_preview=True)
-
-    return await broadcast.broadcast(bot, uids, send_one)
-
+# ---------- Напоминания оргам ----------
+# Гостям бот сам ничего не шлёт. В заданное время он лишь пингует админ-группу
+# («пора напомнить гостям»), а рассылку орги делают вручную через /broadcast.
 
 async def send_reminder(bot: Bot, key: str, when_label: str) -> None:
-    if await db.is_broadcast_sent(key):
-        log.info("Напоминание %s уже отправлено — пропуск.", key)
+    if not config.ADMIN_GROUP_ID:
         return
-    await _send_segment(bot, segments.SEG_PAID, texts.reminder_paid(when_label))
-    await _send_segment(bot, segments.SEG_DOOR, texts.reminder_door(when_label))
-    await _send_segment(bot, segments.SEG_NOT_PAID, texts.reminder_not_paid(when_label))
+    if await db.is_broadcast_sent(key):
+        log.info("Напоминание оргам %s уже отправлено — пропуск.", key)
+        return
+    # немного статистики, чтобы оргам сразу был понятен объём рассылки
+    by_status = await db.count_by_status()
+    paid = by_status.get(db.STATUS_CONFIRMED_ONLINE, {"count": 0})["count"]
+    total_users = len(await db.list_all_user_ids())
+    try:
+        await bot.send_message(
+            config.ADMIN_GROUP_ID,
+            texts.admin_reminder_nudge(when_label, paid, total_users),
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        log.exception("Не удалось отправить напоминание оргам в админ-группу")
     await db.mark_broadcast_sent(key)
-    log.info("Напоминание %s отправлено.", key)
+    log.info("Напоминание оргам %s отправлено.", key)
 
 
 def _parse_dt(value: str) -> datetime | None:
@@ -81,17 +87,33 @@ def _parse_dt(value: str) -> datetime | None:
         return None
 
 
+async def _periodic_sync() -> None:
+    """Полная перезапись Google-таблицы раз в 30 минут (страховочная синхронизация)."""
+    regs = await db.get_all_registrations(include_new=True)
+    result = await sheets.sync_all(regs)
+    if result >= 0:
+        log.debug("Авто-синхронизация Google Sheets: %s строк.", result)
+    else:
+        log.warning("Авто-синхронизация Google Sheets не удалась (Sheets отключены или ошибка).")
+
+
+async def send_feedback_request(bot: Bot) -> None:
+    """Рассылает запрос обратной связи всем оплатившим онлайн и включает пересылку ответов."""
+    await db.set_meta(FEEDBACK_META_KEY, "1")
+    uids = await db.list_user_ids_by_statuses((db.STATUS_CONFIRMED_ONLINE,))
+
+    async def send_one(b: Bot, uid: int) -> None:
+        await b.send_message(uid, texts.FEEDBACK_REQUEST)
+
+    sent, failed = await broadcast.broadcast(bot, uids, send_one)
+    log.info("Запрос обратной связи разослан: отправлено=%s, ошибок=%s", sent, failed)
+
+
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     sched = AsyncIOScheduler(timezone=config.TZ)
 
-    # ежедневный пост
-    try:
-        hh, mm = config.DAILY_POST_TIME.split(":")
-        sched.add_job(publish_next_post, "cron", hour=int(hh), minute=int(mm),
-                      args=[bot], id="daily_post")
-    except Exception:
-        log.exception("Не удалось настроить ежедневный пост (DAILY_POST_TIME=%s)",
-                      config.DAILY_POST_TIME)
+    # периодическая синхронизация с Google Sheets
+    sched.add_job(_periodic_sync, "interval", minutes=30, id="sheets_sync")
 
     # напоминания
     eve = _parse_dt(config.REMINDER_EVE)
